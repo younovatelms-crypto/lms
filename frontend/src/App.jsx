@@ -16,6 +16,7 @@ import HRLayout      from './components/hr/HRLayout';
 
 // ── Pages ─────────────────────────────────────────────────────────────────
 import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 
 import AdminDashboard    from './pages/admin/Dashboard';
@@ -73,8 +74,9 @@ function App() {
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
         {/* Public */}
-        <Route path="/login" element={<LoginPage />} />
-         <Route path="/forgot_password" element={<ForgotPasswordPage />} />
+        <Route path="/login"           element={<LoginPage />} />
+        <Route path="/register"        element={<RegisterPage />} />
+        <Route path="/forgot_password" element={<ForgotPasswordPage />} />
         <Route path="/"      element={<RoleRedirect />} />
 
         {/* Admin */}

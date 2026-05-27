@@ -17,6 +17,26 @@ const authHeader = (token) => ({
 // THUNKS — declared BEFORE createSlice so extraReducers can reference them
 // =============================================================================
 
+// ─── Register ───────────────────────────────────────────────────────────────
+export const register = createAsyncThunk(
+  'auth/register',
+  async ({ name, email, password, role }, { rejectWithValue }) => {
+    try {
+      const { data } = await axios.post(`${API}/api/auth/register`, {
+        name,
+        email,
+        password,
+        role,
+      });
+      return data;
+    } catch (err) {
+      return rejectWithValue(
+        err.response?.data?.message || 'Registration failed. Please try again.'
+      );
+    }
+  }
+);
+
 // ─── Login ────────────────────────────────────────────────────────────────────
 export const login = createAsyncThunk(
   'auth/login',
@@ -180,6 +200,19 @@ const authSlice = createSlice({
 
   extraReducers: (builder) => {
     builder
+
+      // ── register ───────────────────────────────────────────────────────────
+      .addCase(register.pending, (state) => {
+        state.status = 'loading';
+        state.error  = null;
+      })
+      .addCase(register.fulfilled, (state) => {
+        state.status = 'idle';
+      })
+      .addCase(register.rejected, (state, action) => {
+        state.status = 'idle';
+        state.error  = action.payload;
+      })
 
       // ── login ──────────────────────────────────────────────────────────────
       .addCase(login.pending, (state) => {
