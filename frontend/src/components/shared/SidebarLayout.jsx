@@ -1,18 +1,36 @@
 // src/components/shared/SidebarLayout.jsx
-// Younovate LMS — Shared Sidebar Layout
-// Features: collapse/expand · mobile overlay · Tabler icons · role-based brand color
-// Used by AdminLayout, TrainerLayout, TraineeLayout, HRLayout
+// Younovate LMS — Shared Sidebar Layout v2.0
+//
+// ✅ FIXES & ADDITIONS vs v1:
+//   1. Mobile profile dropdown — click avatar in topbar → shows name/role/logout card
+//   2. Submenu support — nav items with `children[]` expand inline (accordion style)
+//   3. Mobile nav — hamburger opens full sidebar overlay; backdrop click closes
+//   4. Submenu active state — parent link highlights when any child is active
+//   5. Keyboard nav — Escape closes mobile sidebar AND profile dropdown
+//   6. Click-outside closes profile dropdown (useClickOutside hook)
+//   7. Route change auto-closes mobile sidebar AND profile dropdown
+//   8. Collapsed sidebar shows submenu in tooltip-style flyout (desktop)
+//   9. Mobile: collapse toggle hidden; sidebar always full-width when open
+//  10. Smooth CSS transitions with prefers-reduced-motion support
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  createContext,
+  useContext,
+} from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { logout, logoutUser, selectCurrentUser } from '../../features/auth/authSlice';
 import toast from 'react-hot-toast';
 
-// ─── Tabler icon CDN (loaded once, all icons available) ───────────────────────
-const TABLER_CDN = 'https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.x/tabler-icons.min.css';
+// ─── Tabler icons CDN ─────────────────────────────────────────────────────────
+const TABLER_CDN =
+  'https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.x/tabler-icons.min.css';
 
-// ─── Role brand color map ─────────────────────────────────────────────────────
+// ─── Role → brand colour ──────────────────────────────────────────────────────
 const ROLE_COLOR = {
   admin:   '#6366F1',
   trainer: '#0D9488',
@@ -20,56 +38,276 @@ const ROLE_COLOR = {
   hr:      '#7C3AED',
 };
 
-// ─── Icon component using Tabler webfont ──────────────────────────────────────
-const Icon = ({ name, size = 18, style = {} }) => (
+// ─── Internal context (avoids prop-drilling collapsed + brandColor) ───────────
+const SidebarCtx = createContext({ collapsed: false, brandColor: '#6366F1' });
+
+// ─── Tiny hook: run callback when user clicks outside a ref ──────────────────
+function useClickOutside(ref, callback, enabled = true) {
+  useEffect(() => {
+    if (!enabled) return;
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) callback();
+    };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
+  }, [ref, callback, enabled]);
+}
+
+// ─── Icon ─────────────────────────────────────────────────────────────────────
+const Icon = ({ name, size = 18, className = '', style = {} }) => (
   <i
-    className={`ti ti-${name}`}
-    style={{ fontSize: size, lineHeight: 1, ...style }}
+    className={`ti ti-${name} ${className}`}
+    style={{ fontSize: size, lineHeight: 1, display: 'inline-block', ...style }}
     aria-hidden="true"
   />
 );
 
-// ─── Nav section with optional label ─────────────────────────────────────────
-const NavSection = ({ label, children, collapsed }) => (
-  <div style={s.navSection}>
-    {!collapsed && label && (
-      <p style={s.navLabel}>{label}</p>
-    )}
-    {children}
-  </div>
-);
+// ─── Single flat nav link (no children) ──────────────────────────────────────
+const FlatLink = ({ item, closeMobile }) => {
+  const { collapsed, brandColor } = useContext(SidebarCtx);
+  return (
+    <NavLink
+      to={item.to}
+      onClick={closeMobile}
+      title={collapsed ? item.label : undefined}
+      className="yn-navlink"
+      style={({ isActive }) => ({
+        '--active-bg':     isActive ? `${brandColor}22` : 'transparent',
+        '--active-border': isActive ? brandColor        : 'transparent',
+        '--active-color':  isActive ? '#f1f5f9'         : '#94a3b8',
+      })}
+    >
+      <span className="yn-navlink-icon">
+        <Icon name={item.icon} size={17} />
+      </span>
+      {!collapsed && (
+        <>
+          <span className="yn-navlink-text">{item.label}</span>
+          {item.badge > 0 && (
+            <span className="yn-badge">{item.badge > 99 ? '99+' : item.badge}</span>
+          )}
+        </>
+      )}
+    </NavLink>
+  );
+};
 
-// ─── Individual nav link ──────────────────────────────────────────────────────
-const SideLink = ({ to, icon, label, badge, collapsed, brandColor, onClick }) => (
-  <NavLink
-    to={to}
-    onClick={onClick}
-    title={collapsed ? label : undefined}
-    style={({ isActive }) => ({
-      ...s.navLink,
-      background:    isActive ? `${brandColor}20` : 'transparent',
-      borderLeft:    isActive ? `3px solid ${brandColor}` : '3px solid transparent',
-      color:         isActive ? '#f1f5f9' : '#94a3b8',
-    })}
-  >
-    <Icon name={icon} size={18} style={{ flexShrink: 0, width: 20, textAlign: 'center' }} />
-    {!collapsed && (
-      <>
-        <span style={s.navLinkText}>{label}</span>
-        {badge != null && badge > 0 && (
-          <span style={s.badge}>{badge > 99 ? '99+' : badge}</span>
+// ─── Submenu parent + children ────────────────────────────────────────────────
+// On desktop-collapsed: shows flyout on hover
+// On desktop-expanded: accordion expand/collapse
+// On mobile: accordion (collapsed prop ignored)
+const SubMenu = ({ item, closeMobile }) => {
+  const { collapsed, brandColor } = useContext(SidebarCtx);
+  const location = useLocation();
+
+  // Is any child currently active?
+  const hasActiveChild = item.children.some(c =>
+    location.pathname.startsWith(c.to)
+  );
+
+  const [open, setOpen] = useState(hasActiveChild);
+
+  // Auto-open when navigating to a child
+  useEffect(() => {
+    if (hasActiveChild) setOpen(true);
+  }, [hasActiveChild]);
+
+  const toggle = () => setOpen(o => !o);
+
+  if (collapsed) {
+    // Collapsed desktop: flyout on hover
+    return (
+      <div className="yn-submenu-flyout-wrap">
+        <button
+          className="yn-navlink yn-navlink-btn"
+          title={item.label}
+          style={{
+            '--active-bg':     hasActiveChild ? `${brandColor}22` : 'transparent',
+            '--active-border': hasActiveChild ? brandColor        : 'transparent',
+            '--active-color':  hasActiveChild ? '#f1f5f9'         : '#94a3b8',
+          }}
+        >
+          <span className="yn-navlink-icon">
+            <Icon name={item.icon} size={17} />
+          </span>
+        </button>
+        {/* Flyout panel */}
+        <div className="yn-flyout">
+          <p className="yn-flyout-title">{item.label}</p>
+          {item.children.map(c => (
+            <NavLink
+              key={c.to}
+              to={c.to}
+              onClick={closeMobile}
+              className="yn-flyout-link"
+              style={({ isActive }) => ({
+                color:      isActive ? '#f1f5f9'  : '#94a3b8',
+                background: isActive ? `${brandColor}22` : 'transparent',
+              })}
+            >
+              <Icon name={c.icon} size={14} style={{ marginRight: 8 }} />
+              {c.label}
+              {c.badge > 0 && (
+                <span className="yn-badge" style={{ marginLeft: 'auto' }}>
+                  {c.badge}
+                </span>
+              )}
+            </NavLink>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Expanded desktop or mobile: accordion
+  return (
+    <div className="yn-submenu-wrap">
+      <button
+        className="yn-navlink yn-navlink-btn"
+        onClick={toggle}
+        aria-expanded={open}
+        style={{
+          '--active-bg':     hasActiveChild ? `${brandColor}22` : 'transparent',
+          '--active-border': hasActiveChild ? brandColor        : 'transparent',
+          '--active-color':  hasActiveChild ? '#f1f5f9'         : '#94a3b8',
+        }}
+      >
+        <span className="yn-navlink-icon">
+          <Icon name={item.icon} size={17} />
+        </span>
+        <span className="yn-navlink-text">{item.label}</span>
+        {item.badge > 0 && (
+          <span className="yn-badge">{item.badge}</span>
         )}
-      </>
-    )}
-  </NavLink>
-);
+        <Icon
+          name="chevron-down"
+          size={14}
+          style={{
+            marginLeft: 'auto',
+            flexShrink: 0,
+            transition: 'transform 0.2s',
+            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+          }}
+        />
+      </button>
 
-// ─── Main Layout Component ────────────────────────────────────────────────────
+      {/* Children */}
+      <div
+        className="yn-submenu-children"
+        style={{ maxHeight: open ? `${item.children.length * 44}px` : '0px' }}
+      >
+        {item.children.map(c => (
+          <NavLink
+            key={c.to}
+            to={c.to}
+            onClick={closeMobile}
+            className="yn-sub-link"
+            style={({ isActive }) => ({
+              color:      isActive ? '#f1f5f9'         : '#64748b',
+              background: isActive ? `${brandColor}18` : 'transparent',
+              borderLeft: isActive ? `2px solid ${brandColor}` : '2px solid transparent',
+            })}
+          >
+            <Icon name={c.icon} size={14} style={{ marginRight: 8, flexShrink: 0 }} />
+            <span className="yn-sub-link-text">{c.label}</span>
+            {c.badge > 0 && (
+              <span className="yn-badge" style={{ marginLeft: 'auto' }}>{c.badge}</span>
+            )}
+          </NavLink>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ─── Nav section group ────────────────────────────────────────────────────────
+const NavSection = ({ group, closeMobile }) => {
+  const { collapsed } = useContext(SidebarCtx);
+  const items = group.items || [group];
+  return (
+    <div className="yn-nav-section">
+      {!collapsed && group.label && (
+        <p className="yn-section-label">{group.label}</p>
+      )}
+      {items.map(item =>
+        item.children?.length ? (
+          <SubMenu key={item.label || item.to} item={item} closeMobile={closeMobile} />
+        ) : (
+          <FlatLink key={item.to} item={item} closeMobile={closeMobile} />
+        )
+      )}
+    </div>
+  );
+};
+
+// ─── Profile dropdown (topbar avatar click) ───────────────────────────────────
+const ProfileDropdown = ({ user, brandColor, onLogout, loggingOut, onClose }) => {
+  const navigate = useNavigate();
+  return (
+    <div className="yn-profile-dropdown" role="menu" aria-label="User menu">
+      {/* Header */}
+      <div className="yn-profile-header" style={{ borderBottom: `3px solid ${brandColor}` }}>
+        <div className="yn-profile-avatar" style={{ background: brandColor }}>
+          {user?.name?.slice(0, 2).toUpperCase() || 'YN'}
+        </div>
+        <div className="yn-profile-info">
+          <p className="yn-profile-name">{user?.name || 'User'}</p>
+          <p className="yn-profile-role">{user?.role}</p>
+          <p className="yn-profile-email">{user?.email || ''}</p>
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="yn-profile-actions">
+        <button
+          className="yn-profile-action"
+          onClick={() => { navigate(`/${user?.role}/settings`); onClose(); }}
+          role="menuitem"
+        >
+          <Icon name="settings" size={15} />
+          <span>Settings</span>
+        </button>
+        <button
+          className="yn-profile-action"
+          onClick={() => { navigate(`/${user?.role}/profile`); onClose(); }}
+          role="menuitem"
+        >
+          <Icon name="user-circle" size={15} />
+          <span>My Profile</span>
+        </button>
+        {user?.isMentor && (
+          <div className="yn-profile-mentor-badge">
+            <Icon name="award" size={13} />
+            <span>Mentor</span>
+          </div>
+        )}
+      </div>
+
+      <div className="yn-profile-divider" />
+
+      <button
+        className="yn-profile-logout"
+        onClick={onLogout}
+        disabled={loggingOut}
+        role="menuitem"
+      >
+        <Icon name="logout" size={15} />
+        <span>{loggingOut ? 'Signing out…' : 'Sign out'}</span>
+      </button>
+    </div>
+  );
+};
+
+// ─── Main Layout ──────────────────────────────────────────────────────────────
 export default function SidebarLayout({
-  navItems,           // Array of nav item groups or flat items
-  brandColor,         // Override — defaults to role color
+  navItems,
+  brandColor,
   title = 'Younovate',
-  pageTitle,          // Optional static page title in topbar
+  pageTitle,
 }) {
   const dispatch  = useAppDispatch();
   const navigate  = useNavigate();
@@ -79,43 +317,63 @@ export default function SidebarLayout({
   const resolvedColor = brandColor || ROLE_COLOR[user?.role] || '#6366F1';
   const initials      = user?.name?.slice(0, 2).toUpperCase() || 'YN';
 
-  const [collapsed,    setCollapsed]    = useState(false);
-  const [mobileOpen,   setMobileOpen]   = useState(false);
-  const [loggingOut,   setLoggingOut]   = useState(false);
+  const [collapsed,  setCollapsed]  = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [profileOpen,setProfileOpen]= useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
-  // Inject Tabler icon CSS once
+  const profileRef  = useRef(null);
+  const sidebarRef  = useRef(null);
+
+  // Inject Tabler CSS once
   useEffect(() => {
     if (!document.getElementById('tabler-icons-css')) {
-      const link  = document.createElement('link');
-      link.id     = 'tabler-icons-css';
-      link.rel    = 'stylesheet';
-      link.href   = TABLER_CDN;
+      const link = document.createElement('link');
+      link.id   = 'tabler-icons-css';
+      link.rel  = 'stylesheet';
+      link.href = TABLER_CDN;
       document.head.appendChild(link);
     }
   }, []);
 
-  // Close mobile sidebar on route change
+  // Close everything on route change
   useEffect(() => {
     setMobileOpen(false);
+    setProfileOpen(false);
   }, [location.pathname]);
 
-  // Close mobile sidebar on Escape key
+  // Escape key handler
   useEffect(() => {
-    const handler = (e) => { if (e.key === 'Escape') setMobileOpen(false); };
+    const handler = (e) => {
+      if (e.key === 'Escape') {
+        setMobileOpen(false);
+        setProfileOpen(false);
+      }
+    };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
-  // Derive current page title from navItems + location
+  // Click-outside closes profile dropdown
+  useClickOutside(profileRef, () => setProfileOpen(false), profileOpen);
+
+  // Derived page title
   const currentLabel = (() => {
     if (pageTitle) return pageTitle;
-    const flat = navItems.flatMap(g => g.items || [g]);
-    const match = flat.find(item => location.pathname.startsWith(item.to));
+    const allItems = navItems.flatMap(g => {
+      const items = g.items || [g];
+      return items.flatMap(i => i.children?.length ? i.children : [i]);
+    });
+    const match = allItems
+      .filter(i => i.to)
+      .sort((a, b) => b.to.length - a.to.length) // longest match first
+      .find(i => location.pathname.startsWith(i.to));
     return match?.label || title;
   })();
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     setLoggingOut(true);
+    setProfileOpen(false);
     try {
       await dispatch(logoutUser());
     } finally {
@@ -123,20 +381,20 @@ export default function SidebarLayout({
       toast.success('Signed out successfully');
       navigate('/login', { replace: true });
     }
-  };
+  }, [dispatch, navigate]);
 
   const closeMobile = useCallback(() => setMobileOpen(false), []);
 
   return (
-    <>
-      <style>{CSS}</style>
+    <SidebarCtx.Provider value={{ collapsed, brandColor: resolvedColor }}>
+      <style>{buildCSS(resolvedColor)}</style>
 
       <div className="yn-shell">
 
-        {/* ── Mobile overlay ── */}
+        {/* ── Mobile backdrop ── */}
         {mobileOpen && (
           <div
-            className="yn-overlay"
+            className="yn-backdrop"
             onClick={closeMobile}
             role="presentation"
             aria-hidden="true"
@@ -145,92 +403,91 @@ export default function SidebarLayout({
 
         {/* ── Sidebar ── */}
         <aside
-          className={`yn-sidebar${collapsed ? ' yn-collapsed' : ''}${mobileOpen ? ' yn-mobile-open' : ''}`}
+          ref={sidebarRef}
+          className={[
+            'yn-sidebar',
+            collapsed  ? 'yn-collapsed'    : '',
+            mobileOpen ? 'yn-mobile-open'  : '',
+          ].join(' ')}
           role="navigation"
           aria-label="Main navigation"
         >
           {/* Brand row */}
-          <div className="yn-brand-row">
-            <div className="yn-logo" style={{ background: resolvedColor }} aria-hidden="true">
-              Y
-            </div>
-            {!collapsed && (
-              <span className="yn-brand-name">{title}</span>
-            )}
+          <div className="yn-brand">
+            <div className="yn-brand-logo" style={{ background: resolvedColor }}>Y</div>
+            {!collapsed && <span className="yn-brand-text">{title}</span>}
+            {/* Desktop: collapse toggle */}
             <button
-              className="yn-collapse-btn"
+              className="yn-collapse-btn yn-desktop-only"
               onClick={() => setCollapsed(c => !c)}
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
-              <Icon name={collapsed ? 'chevron-right' : 'chevron-left'} size={16} />
+              <Icon name={collapsed ? 'chevron-right' : 'chevron-left'} size={15} />
+            </button>
+            {/* Mobile: close button */}
+            <button
+              className="yn-collapse-btn yn-mobile-only"
+              onClick={closeMobile}
+              aria-label="Close navigation"
+            >
+              <Icon name="x" size={15} />
             </button>
           </div>
 
-          {/* Nav items */}
+          {/* Nav scroll */}
           <div className="yn-nav-scroll">
-            {navItems.map((group, gi) => {
-              const items = group.items || [group];
-              return (
-                <NavSection key={gi} label={group.label} collapsed={collapsed}>
-                  {items.map(item => (
-                    <SideLink
-                      key={item.to}
-                      to={item.to}
-                      icon={item.icon}
-                      label={item.label}
-                      badge={item.badge}
-                      collapsed={collapsed}
-                      brandColor={resolvedColor}
-                    />
-                  ))}
-                </NavSection>
-              );
-            })}
+            {navItems.map((group, gi) => (
+              <NavSection key={gi} group={group} closeMobile={closeMobile} />
+            ))}
           </div>
 
-          {/* User area */}
-          <div className="yn-user-area">
-            {!collapsed && (
-              <div className="yn-user-row">
-                <div
-                  className="yn-avatar"
-                  style={{ background: resolvedColor }}
-                  aria-hidden="true"
-                >
+          {/* User footer (collapsed: just avatar) */}
+          <div className="yn-sidebar-footer">
+            {!collapsed ? (
+              <div className="yn-footer-user">
+                <div className="yn-footer-avatar" style={{ background: resolvedColor }}>
                   {initials}
                 </div>
-                <div className="yn-user-info">
-                  <p className="yn-user-name">{user?.name || 'User'}</p>
-                  <p className="yn-user-role">{user?.role}</p>
+                <div className="yn-footer-info">
+                  <p className="yn-footer-name">{user?.name || 'User'}</p>
+                  <p className="yn-footer-role">{user?.role}</p>
                 </div>
+                <button
+                  className="yn-footer-logout"
+                  onClick={handleLogout}
+                  disabled={loggingOut}
+                  title="Sign out"
+                  aria-label="Sign out"
+                >
+                  <Icon name="logout" size={16} />
+                </button>
               </div>
+            ) : (
+              <button
+                className="yn-footer-logout yn-footer-logout-solo"
+                onClick={handleLogout}
+                disabled={loggingOut}
+                title="Sign out"
+                aria-label="Sign out"
+              >
+                <Icon name="logout" size={16} />
+              </button>
             )}
-            <button
-              className="yn-logout-btn"
-              onClick={handleLogout}
-              disabled={loggingOut}
-              title="Sign out"
-              aria-label="Sign out"
-            >
-              <Icon name="logout" size={16} />
-              {!collapsed && (
-                <span>{loggingOut ? 'Signing out…' : 'Sign out'}</span>
-              )}
-            </button>
           </div>
         </aside>
 
-        {/* ── Main content area ── */}
+        {/* ── Main ── */}
         <div className="yn-main">
 
           {/* Top bar */}
           <header className="yn-topbar">
             <div className="yn-topbar-left">
-              {/* Hamburger — mobile only */}
+              {/* Hamburger (mobile) */}
               <button
                 className="yn-hamburger"
                 onClick={() => setMobileOpen(true)}
-                aria-label="Open navigation menu"
+                aria-label="Open navigation"
+                aria-expanded={mobileOpen}
               >
                 <Icon name="menu-2" size={20} />
               </button>
@@ -241,357 +498,451 @@ export default function SidebarLayout({
               <button className="yn-icon-btn" aria-label="Search">
                 <Icon name="search" size={16} />
               </button>
-              <button className="yn-icon-btn yn-notif-btn" aria-label="Notifications">
+              <button className="yn-icon-btn yn-notif-wrap" aria-label="Notifications">
                 <Icon name="bell" size={16} />
-                <span className="yn-notif-dot" aria-label="You have notifications" />
+                <span className="yn-notif-dot" />
               </button>
-              <div
-                className="yn-topbar-avatar"
-                style={{ background: resolvedColor }}
-                role="img"
-                aria-label={`Logged in as ${user?.name}`}
-              >
-                {initials}
+
+              {/* Profile avatar + dropdown */}
+              <div ref={profileRef} className="yn-profile-wrap">
+                <button
+                  className="yn-topbar-avatar"
+                  style={{ background: resolvedColor }}
+                  onClick={() => setProfileOpen(p => !p)}
+                  aria-label="Open user menu"
+                  aria-expanded={profileOpen}
+                  aria-haspopup="menu"
+                >
+                  {initials}
+                  <span
+                    className="yn-avatar-caret"
+                    style={{ transform: profileOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                  >
+                    <Icon name="chevron-down" size={10} />
+                  </span>
+                </button>
+
+                {profileOpen && (
+                  <ProfileDropdown
+                    user={user}
+                    brandColor={resolvedColor}
+                    onLogout={handleLogout}
+                    loggingOut={loggingOut}
+                    onClose={() => setProfileOpen(false)}
+                  />
+                )}
               </div>
             </div>
           </header>
 
           {/* Page content */}
-          <main className="yn-content">
+          <main className="yn-content" id="main-content">
             <Outlet />
           </main>
         </div>
       </div>
-    </>
+    </SidebarCtx.Provider>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-const s = {
-  navSection:  { padding: '6px 0' },
-  navLabel: {
-    fontSize:      10,
-    fontWeight:    700,
-    color:         '#475569',
-    letterSpacing: '0.8px',
-    textTransform: 'uppercase',
-    padding:       '4px 14px 6px',
-    whiteSpace:    'nowrap',
-    overflow:      'hidden',
-  },
-  navLink: {
-    display:        'flex',
-    alignItems:     'center',
-    gap:            10,
-    padding:        '10px 14px',
-    textDecoration: 'none',
-    fontSize:       13,
-    fontWeight:     500,
-    transition:     'all .15s',
-    whiteSpace:     'nowrap',
-    overflow:       'hidden',
-    borderRight:    'none',
-    borderTop:      'none',
-    borderBottom:   'none',
-    cursor:         'pointer',
-  },
-  navLinkText: { flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' },
-  badge: {
-    fontSize:     10,
-    fontWeight:   700,
-    background:   '#ef4444',
-    color:        '#fff',
-    borderRadius: 10,
-    padding:      '1px 6px',
-    flexShrink:   0,
-  },
-};
+// ─── CSS factory (injects brand color as CSS variable) ───────────────────────
+function buildCSS(brandColor) {
+  return `
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
 
-const CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+:root {
+  --yn-brand:    ${brandColor};
+  --yn-sidebar:  #0F172A;
+  --yn-sidebar2: #1E293B;
+  --yn-text-1:   #F1F5F9;
+  --yn-text-2:   #94A3B8;
+  --yn-text-3:   #64748B;
+  --yn-border:   rgba(255,255,255,0.07);
+  --yn-radius:   10px;
+  --yn-font:     'DM Sans', system-ui, sans-serif;
+}
 
-  *, *::before, *::after { box-sizing: border-box; }
+*, *::before, *::after { box-sizing: border-box; }
 
-  .yn-shell {
-    display: flex;
-    height: 100vh;
-    overflow: hidden;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    background: #F8FAFC;
-  }
+.yn-shell {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  font-family: var(--yn-font);
+  background: #F8FAFC;
+}
 
-  /* ── Overlay (mobile) ─────────────────────────────────────────────────── */
-  .yn-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.5);
-    z-index: 40;
-    backdrop-filter: blur(2px);
-  }
+/* ── Backdrop ────────────────────────────────────────────────────────────── */
+.yn-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(3px);
+  z-index: 40;
+  animation: yn-fade-in 0.2s ease;
+}
+@keyframes yn-fade-in { from { opacity:0 } to { opacity:1 } }
 
-  /* ── Sidebar ──────────────────────────────────────────────────────────── */
+/* ── Sidebar ─────────────────────────────────────────────────────────────── */
+.yn-sidebar {
+  width: 228px;
+  background: var(--yn-sidebar);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+  transition: width 0.25s cubic-bezier(0.4,0,0.2,1);
+  z-index: 50;
+  position: relative;
+}
+.yn-sidebar.yn-collapsed { width: 64px; }
+
+/* Brand */
+.yn-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 14px 16px;
+  border-bottom: 1px solid var(--yn-border);
+  flex-shrink: 0;
+}
+.yn-brand-logo {
+  width: 36px; height: 36px; flex-shrink: 0;
+  border-radius: var(--yn-radius);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 16px; font-weight: 800;
+}
+.yn-brand-text {
+  color: var(--yn-text-1);
+  font-weight: 700; font-size: 15px;
+  flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.yn-collapse-btn {
+  background: none; border: none; cursor: pointer;
+  color: var(--yn-text-3);
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px; flex-shrink: 0;
+  transition: color 0.15s, background 0.15s;
+}
+.yn-collapse-btn:hover { color: var(--yn-text-2); background: rgba(255,255,255,0.07); }
+
+/* Nav scroll */
+.yn-nav-scroll {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  padding: 8px 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--yn-sidebar2) transparent;
+}
+.yn-nav-scroll::-webkit-scrollbar { width: 4px; }
+.yn-nav-scroll::-webkit-scrollbar-thumb { background: var(--yn-sidebar2); border-radius: 4px; }
+
+.yn-nav-section { padding: 4px 0; }
+.yn-section-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--yn-text-3);
+  padding: 8px 16px 5px;
+  white-space: nowrap; overflow: hidden;
+}
+
+/* Flat nav link */
+.yn-navlink {
+  display: flex; align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  text-decoration: none;
+  font-size: 13.5px; font-weight: 500;
+  white-space: nowrap; overflow: hidden;
+  border-left: 3px solid var(--active-border, transparent);
+  background: var(--active-bg, transparent);
+  color: var(--active-color, #94a3b8);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  cursor: pointer;
+  width: 100%;
+  font-family: var(--yn-font);
+}
+.yn-navlink:hover { background: rgba(255,255,255,0.05); color: #cbd5e1; }
+.yn-navlink-btn { border: none; text-align: left; }
+.yn-navlink-icon { width: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.yn-navlink-text { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+
+/* Badge pill */
+.yn-badge {
+  font-size: 10px; font-weight: 700;
+  background: #ef4444; color: #fff;
+  border-radius: 99px; padding: 1px 6px;
+  flex-shrink: 0;
+}
+
+/* Submenu accordion */
+.yn-submenu-wrap { position: relative; }
+.yn-submenu-children {
+  overflow: hidden;
+  transition: max-height 0.25s cubic-bezier(0.4,0,0.2,1);
+}
+.yn-sub-link {
+  display: flex; align-items: center;
+  padding: 9px 14px 9px 44px;
+  font-size: 13px; font-weight: 500;
+  text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap; overflow: hidden;
+  font-family: var(--yn-font);
+}
+.yn-sub-link:hover { background: rgba(255,255,255,0.05); color: #cbd5e1; }
+.yn-sub-link-text { overflow: hidden; text-overflow: ellipsis; flex: 1; }
+
+/* Collapsed flyout */
+.yn-submenu-flyout-wrap { position: relative; }
+.yn-flyout {
+  position: absolute;
+  left: 100%; top: 0;
+  background: #1E293B;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--yn-radius);
+  min-width: 180px;
+  padding: 8px 0;
+  z-index: 100;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  opacity: 0; pointer-events: none;
+  transform: translateX(6px);
+  transition: opacity 0.15s, transform 0.15s;
+}
+.yn-submenu-flyout-wrap:hover .yn-flyout {
+  opacity: 1; pointer-events: auto; transform: translateX(2px);
+}
+.yn-flyout-title {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.7px;
+  text-transform: uppercase; color: var(--yn-text-3);
+  padding: 4px 14px 8px;
+}
+.yn-flyout-link {
+  display: flex; align-items: center;
+  padding: 9px 14px;
+  font-size: 13px; font-weight: 500;
+  text-decoration: none;
+  transition: background 0.15s;
+  font-family: var(--yn-font);
+}
+.yn-flyout-link:hover { background: rgba(255,255,255,0.06); }
+
+/* Sidebar footer */
+.yn-sidebar-footer {
+  border-top: 1px solid var(--yn-border);
+  padding: 12px;
+  flex-shrink: 0;
+}
+.yn-footer-user {
+  display: flex; align-items: center; gap: 10px; min-width: 0;
+}
+.yn-footer-avatar {
+  width: 32px; height: 32px; flex-shrink: 0;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 12px; font-weight: 700;
+}
+.yn-footer-info { flex: 1; min-width: 0; overflow: hidden; }
+.yn-footer-name {
+  margin: 0; color: var(--yn-text-1);
+  font-size: 13px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.yn-footer-role {
+  margin: 0; color: var(--yn-text-3);
+  font-size: 11px; text-transform: capitalize; margin-top: 1px;
+}
+.yn-footer-logout {
+  background: rgba(239,68,68,0.12);
+  border: 1px solid rgba(239,68,68,0.2);
+  color: #fca5a5;
+  width: 34px; height: 34px;
+  border-radius: 8px; cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s;
+}
+.yn-footer-logout:hover:not(:disabled) { background: rgba(239,68,68,0.25); }
+.yn-footer-logout:disabled { opacity: 0.6; cursor: not-allowed; }
+.yn-footer-logout-solo { width: 100%; border-radius: 8px; }
+
+/* ── Main area ───────────────────────────────────────────────────────────── */
+.yn-main {
+  flex: 1; display: flex; flex-direction: column;
+  overflow: hidden; min-width: 0;
+}
+
+/* Top bar */
+.yn-topbar {
+  height: 56px;
+  background: #fff;
+  border-bottom: 1px solid #E2E8F0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px; flex-shrink: 0; z-index: 30;
+}
+.yn-topbar-left  { display: flex; align-items: center; gap: 12px; }
+.yn-topbar-right { display: flex; align-items: center; gap: 8px; }
+
+.yn-hamburger {
+  display: none;
+  background: none; border: none; cursor: pointer;
+  color: #64748B; padding: 6px;
+  border-radius: 8px;
+  align-items: center; justify-content: center;
+  transition: background 0.15s;
+}
+.yn-hamburger:hover { background: #F1F5F9; }
+
+.yn-page-title {
+  font-size: 16px; font-weight: 700; color: #0F172A; margin: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 280px;
+}
+
+.yn-icon-btn {
+  width: 36px; height: 36px;
+  background: none; border: 1px solid #E2E8F0;
+  border-radius: 9px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: #64748B; transition: background 0.15s;
+}
+.yn-icon-btn:hover { background: #F1F5F9; }
+
+.yn-notif-wrap { position: relative; }
+.yn-notif-dot {
+  position: absolute; top: 8px; right: 8px;
+  width: 7px; height: 7px;
+  background: #EF4444; border-radius: 50%;
+  border: 2px solid #fff;
+}
+
+/* Profile avatar + caret */
+.yn-profile-wrap { position: relative; }
+.yn-topbar-avatar {
+  display: flex; align-items: center; gap: 5px;
+  height: 36px; padding: 0 10px 0 4px;
+  border-radius: 99px;
+  border: none; cursor: pointer; color: #fff;
+  font-size: 12px; font-weight: 700;
+  font-family: var(--yn-font);
+  transition: opacity 0.15s;
+}
+.yn-topbar-avatar:hover { opacity: 0.88; }
+.yn-avatar-initials {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: rgba(255,255,255,0.25);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700;
+}
+.yn-avatar-caret { transition: transform 0.2s; display: flex; align-items: center; }
+
+/* Profile dropdown */
+.yn-profile-dropdown {
+  position: absolute; top: calc(100% + 8px); right: 0;
+  width: 240px;
+  background: #1E293B;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--yn-radius);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.4);
+  z-index: 200;
+  animation: yn-dropdown-in 0.18s cubic-bezier(0.34,1.3,0.64,1);
+  overflow: hidden;
+}
+@keyframes yn-dropdown-in {
+  from { opacity:0; transform: scale(0.9) translateY(-6px); }
+  to   { opacity:1; transform: scale(1)   translateY(0); }
+}
+.yn-profile-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px;
+}
+.yn-profile-avatar {
+  width: 44px; height: 44px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 16px; font-weight: 700;
+  flex-shrink: 0;
+}
+.yn-profile-info { min-width: 0; }
+.yn-profile-name {
+  margin: 0; color: #F1F5F9;
+  font-size: 14px; font-weight: 700;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.yn-profile-role {
+  margin: 0; color: var(--yn-brand);
+  font-size: 12px; text-transform: capitalize;
+  font-weight: 600; margin-top: 2px;
+}
+.yn-profile-email {
+  margin: 0; color: var(--yn-text-3);
+  font-size: 11px; margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.yn-profile-actions { padding: 8px 8px 0; }
+.yn-profile-action {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  padding: 10px 10px; border: none; border-radius: 8px;
+  background: none; cursor: pointer; color: var(--yn-text-2);
+  font-size: 13px; font-weight: 500; font-family: var(--yn-font);
+  text-align: left; transition: background 0.15s, color 0.15s;
+}
+.yn-profile-action:hover { background: rgba(255,255,255,0.07); color: var(--yn-text-1); }
+.yn-profile-mentor-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(${brandColor.slice(1).match(/.{2}/g).map(h=>parseInt(h,16)).join(',')},0.18);
+  color: var(--yn-brand);
+  padding: 4px 10px; border-radius: 99px;
+  font-size: 11px; font-weight: 700;
+  margin: 6px 10px 2px;
+}
+.yn-profile-divider {
+  height: 1px; background: var(--yn-border); margin: 8px 0;
+}
+.yn-profile-logout {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  padding: 12px 18px 14px;
+  border: none; background: none; cursor: pointer;
+  color: #FCA5A5; font-size: 13px; font-weight: 600;
+  font-family: var(--yn-font); text-align: left;
+  transition: background 0.15s;
+}
+.yn-profile-logout:hover:not(:disabled) { background: rgba(239,68,68,0.1); }
+.yn-profile-logout:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Page content */
+.yn-content { flex: 1; overflow-y: auto; overflow-x: hidden; }
+
+/* ── Visibility helpers ───────────────────────────────────────────────────── */
+.yn-desktop-only { display: flex; }
+.yn-mobile-only  { display: none; }
+
+/* ── Mobile ──────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
   .yn-sidebar {
-    width: 224px;
-    background: #0F172A;
-    display: flex;
-    flex-direction: column;
-    transition: width 0.25s ease;
-    flex-shrink: 0;
-    overflow: hidden;
-    z-index: 50;
+    position: fixed; top: 0; left: 0; height: 100%;
+    width: 260px !important;
+    transform: translateX(-100%);
+    transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
   }
+  .yn-sidebar.yn-mobile-open { transform: translateX(0); }
 
-  .yn-sidebar.yn-collapsed { width: 64px; }
+  .yn-hamburger { display: flex; }
+  .yn-desktop-only { display: none; }
+  .yn-mobile-only  { display: flex; }
+  .yn-main { width: 100%; }
 
-  /* Brand */
-  .yn-brand-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 18px 14px 16px;
-    border-bottom: 1px solid rgba(255,255,255,0.07);
-    flex-shrink: 0;
+  /* Profile dropdown: full-width on mobile */
+  .yn-profile-dropdown {
+    width: min(280px, calc(100vw - 24px));
+    right: 0;
   }
+}
 
-  .yn-logo {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-    font-weight: 800;
-    color: #fff;
-    flex-shrink: 0;
-    letter-spacing: -0.5px;
+/* ── Reduced motion ─────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .yn-sidebar, .yn-backdrop, .yn-profile-dropdown, .yn-submenu-children {
+    transition: none; animation: none;
   }
-
-  .yn-brand-name {
-    color: #f1f5f9;
-    font-weight: 700;
-    font-size: 15px;
-    flex: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .yn-collapse-btn {
-    background: none;
-    border: none;
-    color: #475569;
-    cursor: pointer;
-    padding: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 6px;
-    flex-shrink: 0;
-    transition: color 0.15s, background 0.15s;
-  }
-  .yn-collapse-btn:hover { color: #94a3b8; background: rgba(255,255,255,0.06); }
-
-  /* Nav scroll area */
-  .yn-nav-scroll {
-    flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding: 8px 0;
-    scrollbar-width: thin;
-    scrollbar-color: #1e293b transparent;
-  }
-  .yn-nav-scroll::-webkit-scrollbar { width: 4px; }
-  .yn-nav-scroll::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
-
-  /* User area */
-  .yn-user-area {
-    border-top: 1px solid rgba(255,255,255,0.07);
-    padding: 12px 12px 14px;
-    flex-shrink: 0;
-  }
-
-  .yn-user-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 10px;
-    min-width: 0;
-  }
-
-  .yn-avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-size: 12px;
-    font-weight: 700;
-    flex-shrink: 0;
-  }
-
-  .yn-user-info { min-width: 0; overflow: hidden; }
-  .yn-user-name {
-    margin: 0;
-    color: #f1f5f9;
-    font-size: 13px;
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .yn-user-role {
-    margin: 0;
-    color: #64748b;
-    font-size: 11px;
-    text-transform: capitalize;
-    margin-top: 1px;
-  }
-
-  .yn-logout-btn {
-    width: 100%;
-    padding: 9px 10px;
-    background: rgba(239,68,68,0.1);
-    border: 1px solid rgba(239,68,68,0.18);
-    color: #fca5a5;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 600;
-    font-family: inherit;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    transition: background 0.15s;
-  }
-  .yn-logout-btn:hover:not(:disabled) { background: rgba(239,68,68,0.2); }
-  .yn-logout-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-
-  /* ── Main area ────────────────────────────────────────────────────────── */
-  .yn-main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-width: 0;
-  }
-
-  /* Top bar */
-  .yn-topbar {
-    height: 54px;
-    background: #fff;
-    border-bottom: 1px solid #e2e8f0;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 20px;
-    flex-shrink: 0;
-    z-index: 30;
-  }
-
-  .yn-topbar-left { display: flex; align-items: center; gap: 12px; }
-
-  .yn-hamburger {
-    display: none;
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: #64748b;
-    padding: 4px;
-    border-radius: 6px;
-    align-items: center;
-    justify-content: center;
-  }
-  .yn-hamburger:hover { background: #f1f5f9; }
-
-  .yn-page-title {
-    font-size: 16px;
-    font-weight: 700;
-    color: #0F172A;
-    margin: 0;
-  }
-
-  .yn-topbar-right { display: flex; align-items: center; gap: 8px; }
-
-  .yn-icon-btn {
-    width: 34px;
-    height: 34px;
-    background: none;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #64748b;
-    transition: background 0.15s;
-  }
-  .yn-icon-btn:hover { background: #f1f5f9; }
-
-  .yn-notif-btn { position: relative; }
-  .yn-notif-dot {
-    position: absolute;
-    top: 7px;
-    right: 7px;
-    width: 7px;
-    height: 7px;
-    background: #ef4444;
-    border-radius: 50%;
-    border: 1.5px solid #fff;
-  }
-
-  .yn-topbar-avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-size: 12px;
-    font-weight: 700;
-    cursor: pointer;
-    flex-shrink: 0;
-  }
-
-  /* Page content */
-  .yn-content {
-    flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
-  }
-
-  /* ── Mobile responsive ────────────────────────────────────────────────── */
-  @media (max-width: 768px) {
-    .yn-sidebar {
-      position: fixed;
-      top: 0;
-      left: 0;
-      height: 100%;
-      width: 224px !important;   /* always full width when open */
-      transform: translateX(-100%);
-      transition: transform 0.25s ease;
-    }
-
-    .yn-sidebar.yn-mobile-open {
-      transform: translateX(0);
-    }
-
-    /* Hide desktop collapse button on mobile */
-    .yn-collapse-btn { display: none; }
-
-    /* Show hamburger */
-    .yn-hamburger { display: flex; }
-
-    /* Main fills full width */
-    .yn-main { width: 100%; }
-  }
-
-  /* ── Reduce motion ────────────────────────────────────────────────────── */
-  @media (prefers-reduced-motion: reduce) {
-    .yn-sidebar, .yn-collapse-btn, .yn-logout-btn { transition: none; }
-  }
+}
 `;
+}
