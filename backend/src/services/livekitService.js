@@ -1,0 +1,42 @@
+// src/services/livekitService.js
+const { AccessToken } = require('livekit-server-sdk');
+
+/**
+ * @param {object} user  - { _id, name, role }
+ * @param {string} roomName
+ * @param {'publisher'|'subscriber'} participantType
+ */
+const generateLiveKitToken = async (user, roomName, participantType) => {
+  const at = new AccessToken(
+    process.env.LIVEKIT_API_KEY,
+    process.env.LIVEKIT_API_SECRET,
+    {
+      identity: user._id.toString(),
+      name: user.name,
+      ttl: 300, // 5 minutes
+    }
+  );
+
+  if (participantType === 'publisher') {
+    at.addGrant({
+      roomJoin: true,
+      room: roomName,
+      canPublish: true,
+      canSubscribe: true,
+      canPublishData: true,
+    });
+  } else {
+    // Trainees are subscribe-only
+    at.addGrant({
+      roomJoin: true,
+      room: roomName,
+      canPublish: false,
+      canSubscribe: true,
+      canPublishData: false,
+    });
+  }
+
+  return at.toJwt();
+};
+
+module.exports = { generateLiveKitToken };

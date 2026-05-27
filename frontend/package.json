@@ -1,0 +1,41 @@
+{
+  "name": "younovate-lms-frontend",
+  "version": "2.0.0",
+  "private": true,
+  "dependencies": {
+    "@livekit/components-react": "^2.5.0",
+    "@reduxjs/toolkit": "^2.3.0",
+    "axios": "^1.7.0",
+    "date-fns": "^3.6.0",
+    "framer-motion": "^11.5.0",
+    "livekit-client": "^2.5.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "react-hook-form": "^7.53.0",
+    "react-hot-toast": "^2.6.0",
+    "react-redux": "^9.1.0",
+    "react-router-dom": "^6.26.0",
+    "react-scripts": "5.0.1",
+    "recharts": "^2.12.0",
+    "redux-persist": "^6.0.0",
+    "socket.io-client": "^4.7.0"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test"
+  },
+  "proxy": "http://localhost:8080",
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}
