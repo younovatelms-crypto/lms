@@ -1,5 +1,5 @@
-// src/pages/admin/AdminDashboard.jsx
-// Matches Younovate Blueprint Screen 03 — Admin Dashboard
+// src/pages/admin/Dashboard.jsx
+// Matches Youva OS Blueprint Screen 03 — Admin Dashboard
 // KPI cards · Attendance trend bars · Recent activity table · Fully responsive
 
 import React, { useEffect } from 'react';
@@ -13,29 +13,29 @@ import {
 
 // ─── Palette (matches blueprint dark nav + light content) ─────────────────────
 const C = {
-  brand:    '#0F172A',
-  accent:   '#6366F1',
-  teal:     '#0D9488',
-  green:    '#15803D',
-  greenLt:  '#DCFCE7',
-  orange:   '#C2410C',
-  orangeLt: '#FED7AA',
-  red:      '#B91C1C',
-  redLt:    '#FEE2E2',
-  yellow:   '#A16207',
-  yellowLt: '#FEF9C3',
-  blue:     '#1D4ED8',
-  blueLt:   '#DBEAFE',
-  purple:   '#7C3AED',
-  purpleLt: '#EDE9FE',
+  brand:    '#1f3d63',
+  accent:   '#2f6f9b',
+  teal:     '#0d8c83',
+  green:    '#16a05f',
+  greenLt:  '#dff8e9',
+  orange:   '#d47a00',
+  orangeLt: '#fff0bf',
+  red:      '#e12e2a',
+  redLt:    '#ffe1df',
+  yellow:   '#9b6500',
+  yellowLt: '#fff3c4',
+  blue:     '#2f6fdf',
+  blueLt:   '#d9e8ff',
+  purple:   '#6d3be6',
+  purpleLt: '#ede6ff',
   white:    '#FFFFFF',
   gray50:   '#F8FAFC',
-  gray100:  '#F1F5F9',
-  gray200:  '#E2E8F0',
-  gray400:  '#94A3B8',
-  gray500:  '#64748B',
-  gray700:  '#374151',
-  gray900:  '#111827',
+  gray100:  '#EEF3F8',
+  gray200:  '#DBE3ED',
+  gray400:  '#7B8CA5',
+  gray500:  '#657691',
+  gray700:  '#27334A',
+  gray900:  '#172033',
 };
 
 // ─── Status badge config ──────────────────────────────────────────────────────
@@ -55,16 +55,16 @@ const KpiCard = ({ label, value, sub, subUp, accent = C.accent, fill }) => (
   <div style={{
     background:   fill || C.white,
     border:       `1px solid ${C.gray200}`,
-    borderTop:    `3px solid ${accent}`,
-    borderRadius: 12,
-    padding:      '18px 20px',
+    borderRadius: 10,
+    padding:      '20px 20px',
     minWidth:     0,
+    boxShadow:    '0 1px 2px rgba(23,32,51,.08), 0 12px 28px rgba(31,61,99,.05)',
   }}>
     <p style={{ fontSize: 12, color: C.gray500, fontWeight: 600,
                 letterSpacing: '0.4px', textTransform: 'uppercase', margin: '0 0 6px' }}>
       {label}
     </p>
-    <p style={{ fontSize: 30, fontWeight: 700, color: accent, margin: '0 0 4px', lineHeight: 1 }}>
+    <p style={{ fontSize: 34, fontWeight: 800, color: C.gray900, margin: '0 0 6px', lineHeight: 1 }}>
       {value ?? 0}
     </p>
     {sub && (
@@ -93,6 +93,10 @@ const ProgressRow = ({ label, pct, color }) => (
     </span>
   </div>
 );
+
+
+
+
 
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 const Badge = ({ status }) => {
@@ -352,9 +356,9 @@ const Dashboard = () => {
 const s = {
   page: {
     padding:    '28px 32px',
-    fontFamily: "'Inter', 'Calibri', sans-serif",
+    fontFamily: "'Public Sans', system-ui, sans-serif",
     maxWidth:   1200,
-    margin:     '0 auto',
+    margin:     0,
   },
   kpiGrid: {
     display:             'grid',
@@ -365,9 +369,10 @@ const s = {
   card: {
     background:   '#fff',
     border:       `1px solid ${C.gray200}`,
-    borderRadius: 12,
+    borderRadius: 10,
     padding:      '20px 24px',
     marginBottom: 20,
+    boxShadow:    '0 1px 2px rgba(23,32,51,.08), 0 12px 28px rgba(31,61,99,.05)',
   },
   td: {
     padding:   '11px 16px',

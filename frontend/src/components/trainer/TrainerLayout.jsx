@@ -34,5 +34,6 @@ const NAV = [
 ];
 
 export default function TrainerLayout() {
-  return <SidebarLayout navItems={NAV} title="Younovate Trainer" />;
+  return <SidebarLayout navItems={NAV} title="Youva OS Trainer" />;
 }
+

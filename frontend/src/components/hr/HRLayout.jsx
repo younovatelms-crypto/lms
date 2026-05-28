@@ -33,5 +33,6 @@ const NAV = [
 ];
 
 export default function HRLayout() {
-  return <SidebarLayout navItems={NAV} title="Younovate HR" />;
+  return <SidebarLayout navItems={NAV} title="Youva OS HR" />;
 }
+

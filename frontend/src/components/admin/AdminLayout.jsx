@@ -10,11 +10,12 @@ import React from 'react';
 import SidebarLayout from '../shared/SidebarLayout';
 
 const NAV = [
+
   {
     label: 'Overview',
     items: [
       { to: '/admin/dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
-      { to: '/admin/analytics', icon: 'chart-bar',        label: 'Analytics' },
+      // { to: '/admin/analytics', icon: 'chart-bar',        label: 'Analytics' },
     ],
   },
   {
@@ -64,12 +65,12 @@ const NAV = [
       },
     ],
   },
-  {
-    label: 'YBLP',
-    items: [
-      { to: '/admin/residency', icon: 'building', label: 'Residency' },
-    ],
-  },
+  // {
+  //   label: 'YBLP',
+  //   items: [
+  //     { to: '/admin/residency', icon: 'building', label: 'Residency' },
+  //   ],
+  // },
   {
     label: 'System',
     items: [
@@ -81,5 +82,6 @@ const NAV = [
 ];
 
 export default function AdminLayout() {
-  return <SidebarLayout navItems={NAV} title="Younovate Admin" />;
+  return <SidebarLayout navItems={NAV} title="Youva OS Admin" />;
 }
+
