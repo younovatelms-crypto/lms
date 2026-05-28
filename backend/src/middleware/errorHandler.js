@@ -1,28 +1,27 @@
 // src/middleware/errorHandler.js
-const errorHandler = (err, req, res, next) => {
-  console.error(`[ERROR] ${req.method} ${req.path}:`, err.message);
+'use strict';
 
-  // Mongoose validation error
+const errorHandler = (err, req, res, next) => {
+  console.error(`[ERROR] ${req.method} ${req.originalUrl}:`, err.message);
+
   if (err.name === 'ValidationError') {
-    const errors = Object.values(err.errors).map((e) => e.message);
+    const errors = Object.values(err.errors).map(e => e.message);
     return res.status(400).json({ success: false, message: errors.join(', ') });
   }
 
-  // Mongoose duplicate key
   if (err.code === 11000) {
-    const field = Object.keys(err.keyValue)[0];
-    return res.status(409).json({
-      success: false,
-      message: `${field} already exists`,
-    });
+    const field = Object.keys(err.keyValue || {})[0] || 'field';
+    return res.status(409).json({ success: false, message: `${field} already exists` });
   }
 
-  // JWT errors
   if (err.name === 'JsonWebTokenError') {
     return res.status(401).json({ success: false, message: 'Invalid token' });
   }
 
-  // Default
+  if (err.name === 'CastError') {
+    return res.status(400).json({ success: false, message: `Invalid ID: ${err.value}` });
+  }
+
   const status = err.statusCode || err.status || 500;
   res.status(status).json({
     success: false,

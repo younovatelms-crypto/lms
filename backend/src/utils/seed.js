@@ -1,78 +1,37 @@
-// src/utils/seed.js
-require('dotenv').config();
+// src/utils/seed.js — create demo accounts for all 4 roles
+'use strict';
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 const mongoose = require('mongoose');
-const User = require('../models/User');
-const Batch = require('../models/Batch');
+const User     = require('../models/User');
+const Batch    = require('../models/Batch');
 
 const seed = async () => {
   await mongoose.connect(process.env.MONGODB_URI, { dbName: 'younovate_lms' });
-  console.log('Connected to MongoDB');
+  console.log('✅  Connected');
 
-  // Clear existing
-  await Promise.all([User.deleteMany({}), Batch.deleteMany({})]);
-  console.log('Cleared existing data');
+  const batch = await Batch.findOneAndUpdate(
+    { name: 'Demo Batch 2026' },
+    { name: 'Demo Batch 2026', startDate: new Date(), status: 'active', course: 'Full Stack Development' },
+    { upsert: true, new: true }
+  );
 
-  // Create batch
-  const batch = await Batch.create({
-    name: 'Full Stack Cohort 1',
-    description: 'MERN Stack + DevOps',
-    startDate: new Date(),
-    status: 'active',
-    maxStudents: 20,
-    course: 'Full Stack Development',
-  });
+  const accounts = [
+    { name: 'Admin Demo',   email: 'admin@younovate.in',   password: 'Admin@1234',   role: 'admin'   },
+    { name: 'Trainer Demo', email: 'trainer@younovate.in', password: 'Trainer@1234', role: 'trainer', batchId: batch._id },
+    { name: 'Trainee Demo', email: 'trainee@younovate.in', password: 'Trainee@1234', role: 'trainee', batchId: batch._id, enrolledAt: new Date() },
+    { name: 'HR Demo',      email: 'hr@younovate.in',      password: 'Hr@12345678',  role: 'hr'      },
+  ];
 
-  // Create users
-  const users = await User.create([
-    {
-      name: 'Admin User',
-      email: 'admin@younovate.com',
-      password: 'Admin@123456',
-      role: 'admin',
-      isActive: true,
-    },
-    {
-      name: 'Trainer One',
-      email: 'trainer1@younovate.com',
-      password: 'Trainer@123456',
-      role: 'trainer',
-      isActive: true,
-      expertise: ['React', 'Node.js', 'MongoDB'],
-      bio: 'Senior full-stack engineer with 8 years of experience.',
-    },
-    {
-      name: 'Arjun Kumar',
-      email: 'arjun@example.com',
-      password: 'Trainee@123456',
-      role: 'trainee',
-      isActive: true,
-      batchId: batch._id,
-      enrolledAt: new Date(),
-    },
-    {
-      name: 'HR Manager',
-      email: 'hr@younovate.com',
-      password: 'HR@123456',
-      role: 'hr',
-      isActive: true,
-    },
-  ]);
+  for (const acc of accounts) {
+    const exists = await User.findOne({ email: acc.email });
+    if (exists) { console.log(`  ⚠️  ${acc.email} already exists — skipped`); continue; }
+    await User.create(acc);
+    console.log(`  ✅  Created ${acc.role}: ${acc.email}`);
+  }
 
-  // Link trainer to batch
-  batch.trainerId = users[1]._id;
-  await batch.save();
-
-  console.log('\n✅ Seed complete!\n');
-  console.log('Demo credentials:');
-  console.log('  Admin:   admin@younovate.com   / Admin@123456');
-  console.log('  Trainer: trainer1@younovate.com / Trainer@123456');
-  console.log('  Trainee: arjun@example.com      / Trainee@123456');
-  console.log('  HR:      hr@younovate.com        / HR@123456');
-
-  await mongoose.disconnect();
+  console.log('\n🌱  Seed complete\n');
+  process.exit(0);
 };
 
-seed().catch((err) => {
-  console.error('Seed failed:', err);
-  process.exit(1);
-});
+seed().catch(err => { console.error(err); process.exit(1); });
