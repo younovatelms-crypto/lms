@@ -809,14 +809,23 @@ function buildCSS(brandColor) {
 /* Profile avatar + caret */
 .yn-profile-wrap { position: relative; }
 .yn-topbar-avatar {
-  display: flex; align-items: center; gap: 5px;
-  width: 42px; height: 42px; padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  width: 42px;
+  height: 42px;
+  padding: 0;
   border-radius: 99px;
-  border: none; cursor: pointer; color: #fff;
-  font-size: 15px; font-weight: 800;
+  border: none;
+  cursor: pointer;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
   font-family: var(--yn-font);
   transition: opacity 0.15s;
 }
+
 .yn-topbar-avatar:hover { opacity: 0.88; }
 .yn-avatar-initials {
   width: 28px; height: 28px; border-radius: 50%;
