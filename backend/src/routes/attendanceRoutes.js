@@ -1,168 +1,105 @@
 // src/routes/attendanceRoutes.js
-// FIX: The old file had TWO separate route definitions (the actual attendanceRoutes.js
-// and an inline duplicate inside sessionRoutes.js) both using different field names
-// (session vs sessionId, trainee vs traineeId).  This single file is the truth.
-// All queries now use the canonical field names: `session` and `trainee`.
+'use strict';
 const express    = require('express');
-const router     = express.Router();
-const { protect, authorize } = require('../middleware/auth');
 const Attendance = require('../models/Attendance');
 const Session    = require('../models/Session');
+const { emitToSession } = require('../services/socketService');
+const { protect, authorize } = require('../middleware/auth');
 
-// ── POST /api/attendance/mark ─────────────────────────────────────────────
-// Trainer marks attendance for all trainees in a session
-// Body: { sessionId, records: [{ traineeId, status, note }] }
-router.post('/mark', protect, authorize('trainer', 'admin'), async (req, res) => {
-  const { sessionId, records } = req.body;
+const router = express.Router();
+router.use(protect);
 
-  if (!sessionId || !Array.isArray(records) || records.length === 0)
-    return res.status(400).json({ success: false, message: 'sessionId and records[] are required' });
-
-  const session = await Session.findById(sessionId);
-  if (!session) return res.status(404).json({ success: false, message: 'Session not found' });
-
-  const saved = await Promise.all(
-    records.map(({ traineeId, status, note }) =>
-      Attendance.findOneAndUpdate(
-        // FIX: use canonical field names `session` and `trainee`
-        { session: sessionId, trainee: traineeId },
-        {
-          session:  sessionId,
-          trainee:  traineeId,
-          batch:    session.batchId,
-          status,
-          note:     note || '',
-          markedBy: req.user._id,
-          markedAt: new Date(),
-        },
-        { upsert: true, new: true }
-      )
-    )
-  );
-
-  res.status(200).json({ success: true, message: 'Attendance marked', count: saved.length, data: saved });
-});
-
-// ── GET /api/attendance/session/:sessionId ────────────────────────────────
-router.get('/session/:sessionId', protect, authorize('trainer', 'admin', 'hr'), async (req, res) => {
+// GET /api/attendance/session/:sessionId
+//   Returns all attendance records for a session (trainer/admin)
+router.get('/session/:sessionId', authorize('trainer', 'admin'), async (req, res) => {
   const records = await Attendance.find({ session: req.params.sessionId })
-    .populate('trainee',  'name email profilePicture batchId')
-    .populate('session',  'title scheduledAt durationMinutes')
+    .populate('trainee', 'name email profilePicture')
     .populate('markedBy', 'name');
-
-  const present = records.filter(r => r.status === 'present').length;
-  const absent  = records.filter(r => r.status === 'absent').length;
-  const late    = records.filter(r => r.status === 'late').length;
-
-  res.status(200).json({
-    success: true,
-    count: records.length,
-    summary: { present, absent, late },
-    data: records,
-  });
+  return res.json({ success: true, records });
 });
 
-// ── GET /api/attendance/trainee/:traineeId ────────────────────────────────
-router.get('/trainee/:traineeId', protect, async (req, res) => {
-  const isSelf    = req.user._id.toString() === req.params.traineeId;
-  const canAccess = ['admin', 'hr', 'trainer'].includes(req.user.role);
-  if (!isSelf && !canAccess)
-    return res.status(403).json({ success: false, message: 'Access denied' });
+// GET /api/attendance/trainee/:traineeId
+//   Returns full attendance history for a trainee (self or trainer/admin)
+router.get('/trainee/:traineeId', async (req, res) => {
+  if (req.user.role === 'trainee' && req.user._id.toString() !== req.params.traineeId)
+    return res.status(403).json({ success: false, message: 'Forbidden' });
 
   const records = await Attendance.find({ trainee: req.params.traineeId })
-    .populate('session', 'title scheduledAt durationMinutes batchId')
+    .populate('session', 'title scheduledAt status')
     .sort({ createdAt: -1 });
 
   const total   = records.length;
-  const present = records.filter(r => r.status === 'present').length;
-  const late    = records.filter(r => r.status === 'late').length;
-  const absent  = total - present - late;
-  const pct     = total ? (((present + late) / total) * 100).toFixed(1) : '0.0';
+  const present = records.filter(r => ['present', 'late'].includes(r.status)).length;
+  const pct     = total ? ((present / total) * 100).toFixed(1) : '0.0';
 
-  res.status(200).json({
-    success: true,
-    summary: { total, present, late, absent, attendancePercentage: `${pct}%`, warning: parseFloat(pct) < 75 },
-    data: records,
-  });
+  return res.json({ success: true, records, stats: { total, present, absent: total - present, percentage: pct } });
 });
 
-// ── GET /api/attendance/batch/:batchId/summary ────────────────────────────
-router.get('/batch/:batchId/summary', protect, authorize('admin', 'hr', 'trainer'), async (req, res) => {
-  const sessions   = await Session.find({ batchId: req.params.batchId }).select('_id title scheduledAt');
-  const sessionIds = sessions.map(s => s._id);
-
-  const records = await Attendance.find({ session: { $in: sessionIds } })
+// GET /api/attendance/batch/:batchId
+//   Batch-level attendance summary
+router.get('/batch/:batchId', authorize('trainer', 'admin'), async (req, res) => {
+  const records = await Attendance.find({ batch: req.params.batchId })
     .populate('trainee', 'name email')
     .populate('session', 'title scheduledAt');
+  return res.json({ success: true, records });
+});
 
-  const byTrainee = {};
-  records.forEach(r => {
-    const id = r.trainee?._id?.toString();
-    if (!id) return;
-    if (!byTrainee[id]) byTrainee[id] = { trainee: r.trainee, total: 0, present: 0, late: 0, absent: 0 };
-    byTrainee[id].total++;
-    if (r.status === 'present')      byTrainee[id].present++;
-    else if (r.status === 'late')    byTrainee[id].late++;
-    else                             byTrainee[id].absent++;
-  });
+// POST /api/attendance/mark  [trainer]
+//   Body: { sessionId, traineeId, status: 'present'|'absent'|'late'|'excused', note? }
+//   Upserts — safe to call multiple times
+router.post('/mark', authorize('trainer', 'admin'), async (req, res) => {
+  const { sessionId, traineeId, status, note } = req.body;
+  if (!sessionId || !traineeId || !status)
+    return res.status(400).json({ success: false, message: 'sessionId, traineeId and status required' });
 
-  const report = Object.values(byTrainee).map(t => ({
-    ...t,
-    percentage: t.total ? (((t.present + t.late) / t.total) * 100).toFixed(1) : '0.0',
+  const session = await Session.findById(sessionId).select('batchId');
+  if (!session) return res.status(404).json({ success: false, message: 'Session not found' });
+
+  const record = await Attendance.findOneAndUpdate(
+    { session: sessionId, trainee: traineeId },
+    { status, note: note || '', markedBy: req.user._id, markedAt: new Date(), batch: session.batchId },
+    { upsert: true, new: true }
+  );
+
+  // Real-time push
+  emitToSession(sessionId, 'attendance:update', { sessionId, traineeId, status });
+
+  return res.json({ success: true, record });
+});
+
+// POST /api/attendance/bulk  [trainer]
+//   Body: { sessionId, records: [{ traineeId, status, note? }] }
+router.post('/bulk', authorize('trainer', 'admin'), async (req, res) => {
+  const { sessionId, records } = req.body;
+  if (!sessionId || !Array.isArray(records) || !records.length)
+    return res.status(400).json({ success: false, message: 'sessionId and records[] required' });
+
+  const session = await Session.findById(sessionId).select('batchId');
+  if (!session) return res.status(404).json({ success: false, message: 'Session not found' });
+
+  const ops = records.map(r => ({
+    updateOne: {
+      filter: { session: sessionId, trainee: r.traineeId },
+      update: { $set: { status: r.status, note: r.note || '', markedBy: req.user._id, markedAt: new Date(), batch: session.batchId } },
+      upsert: true,
+    },
   }));
 
-  res.status(200).json({
-    success: true,
-    totalSessions: sessions.length,
-    trainees: report.length,
-    data: report,
-  });
+  const result = await Attendance.bulkWrite(ops);
+  emitToSession(sessionId, 'attendance:bulk', { sessionId, count: records.length });
+  return res.json({ success: true, message: `${records.length} records saved`, result });
 });
 
-// ── GET /api/attendance/report ────────────────────────────────────────────
-router.get('/report', protect, authorize('admin', 'hr'), async (req, res) => {
-  const { batchId, traineeId, fromDate, toDate, status } = req.query;
-  const filter = {};
-
-  if (traineeId) filter.trainee = traineeId;
-  if (status)    filter.status  = status;
-  if (fromDate || toDate) {
-    filter.markedAt = {};
-    if (fromDate) filter.markedAt.$gte = new Date(fromDate);
-    if (toDate)   filter.markedAt.$lte = new Date(toDate);
-  }
-  if (batchId) {
-    const sessions = await Session.find({ batchId }).select('_id');
-    filter.session = { $in: sessions.map(s => s._id) };
-  }
-
-  const records = await Attendance.find(filter)
-    .populate('trainee', 'name email batchId')
-    .populate('session', 'title scheduledAt batchId')
-    .sort({ markedAt: -1 })
-    .limit(500);
-
-  res.status(200).json({ success: true, count: records.length, data: records });
-});
-
-// ── PUT /api/attendance/:id ───────────────────────────────────────────────
-router.put('/:id', protect, authorize('trainer', 'admin'), async (req, res) => {
-  const { status, note } = req.body;
+// PATCH /api/attendance/:id  [trainer/admin — update a single record]
+//   Body: { status?, note? }
+router.patch('/:id', authorize('trainer', 'admin'), async (req, res) => {
   const record = await Attendance.findByIdAndUpdate(
     req.params.id,
-    { status, note },
-    { new: true, runValidators: true }
-  ).populate('trainee', 'name email').populate('session', 'title scheduledAt');
-
-  if (!record) return res.status(404).json({ success: false, message: 'Record not found' });
-  res.status(200).json({ success: true, data: record });
-});
-
-// ── DELETE /api/attendance/:id ────────────────────────────────────────────
-router.delete('/:id', protect, authorize('admin'), async (req, res) => {
-  const record = await Attendance.findByIdAndDelete(req.params.id);
-  if (!record) return res.status(404).json({ success: false, message: 'Record not found' });
-  res.status(200).json({ success: true, message: 'Attendance record deleted' });
+    { $set: { ...req.body, markedBy: req.user._id, markedAt: new Date() } },
+    { new: true }
+  );
+  if (!record) return res.status(404).json({ success: false, message: 'Attendance record not found' });
+  return res.json({ success: true, record });
 });
 
 module.exports = router;
