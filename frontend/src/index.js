@@ -7,6 +7,8 @@ import { Provider }    from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
 import { store, persistor } from './app/store';
 import App from './App';
+import './theme.css';
+import '@tabler/icons-webfont/dist/tabler-icons.min.css';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 

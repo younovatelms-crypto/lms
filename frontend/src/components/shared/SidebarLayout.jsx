@@ -1,5 +1,5 @@
 // src/components/shared/SidebarLayout.jsx
-// Younovate LMS — Shared Sidebar Layout v2.0
+// Youva OS — Shared Sidebar Layout v2.0
 //
 // ✅ FIXES & ADDITIONS vs v1:
 //   1. Mobile profile dropdown — click avatar in topbar → shows name/role/logout card
@@ -26,16 +26,12 @@ import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { logout, logoutUser, selectCurrentUser } from '../../features/auth/authSlice';
 import toast from 'react-hot-toast';
 
-// ─── Tabler icons CDN ─────────────────────────────────────────────────────────
-const TABLER_CDN =
-  'https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.x/tabler-icons.min.css';
-
 // ─── Role → brand colour ──────────────────────────────────────────────────────
 const ROLE_COLOR = {
-  admin:   '#6366F1',
-  trainer: '#0D9488',
-  trainee: '#2563EB',
-  hr:      '#7C3AED',
+  admin:   '#3f7da0',
+  trainer: '#3f7da0',
+  trainee: '#3f7da0',
+  hr:      '#3f7da0',
 };
 
 // ─── Internal context (avoids prop-drilling collapsed + brandColor) ───────────
@@ -76,9 +72,9 @@ const FlatLink = ({ item, closeMobile }) => {
       title={collapsed ? item.label : undefined}
       className="yn-navlink"
       style={({ isActive }) => ({
-        '--active-bg':     isActive ? `${brandColor}22` : 'transparent',
-        '--active-border': isActive ? brandColor        : 'transparent',
-        '--active-color':  isActive ? '#f1f5f9'         : '#94a3b8',
+        '--active-bg':     isActive ? 'rgba(255,255,255,0.17)' : 'transparent',
+        '--active-border': isActive ? '#ffffff'        : 'transparent',
+        '--active-color':  isActive ? '#ffffff'         : '#c5d3e4',
       })}
     >
       <span className="yn-navlink-icon">
@@ -126,8 +122,8 @@ const SubMenu = ({ item, closeMobile }) => {
           className="yn-navlink yn-navlink-btn"
           title={item.label}
           style={{
-            '--active-bg':     hasActiveChild ? `${brandColor}22` : 'transparent',
-            '--active-border': hasActiveChild ? brandColor        : 'transparent',
+            '--active-bg':     hasActiveChild ? 'rgba(255,255,255,0.17)' : 'transparent',
+            '--active-border': hasActiveChild ? '#ffffff'        : 'transparent',
             '--active-color':  hasActiveChild ? '#f1f5f9'         : '#94a3b8',
           }}
         >
@@ -145,8 +141,8 @@ const SubMenu = ({ item, closeMobile }) => {
               onClick={closeMobile}
               className="yn-flyout-link"
               style={({ isActive }) => ({
-                color:      isActive ? '#f1f5f9'  : '#94a3b8',
-                background: isActive ? `${brandColor}22` : 'transparent',
+                color:      isActive ? '#ffffff'  : '#c5d3e4',
+                background: isActive ? 'rgba(255,255,255,0.17)' : 'transparent',
               })}
             >
               <Icon name={c.icon} size={14} style={{ marginRight: 8 }} />
@@ -171,9 +167,9 @@ const SubMenu = ({ item, closeMobile }) => {
         onClick={toggle}
         aria-expanded={open}
         style={{
-          '--active-bg':     hasActiveChild ? `${brandColor}22` : 'transparent',
-          '--active-border': hasActiveChild ? brandColor        : 'transparent',
-          '--active-color':  hasActiveChild ? '#f1f5f9'         : '#94a3b8',
+          '--active-bg':     hasActiveChild ? 'rgba(255,255,255,0.17)' : 'transparent',
+          '--active-border': hasActiveChild ? '#ffffff'        : 'transparent',
+          '--active-color':  hasActiveChild ? '#ffffff'         : '#c5d3e4',
         }}
       >
         <span className="yn-navlink-icon">
@@ -207,9 +203,9 @@ const SubMenu = ({ item, closeMobile }) => {
             onClick={closeMobile}
             className="yn-sub-link"
             style={({ isActive }) => ({
-              color:      isActive ? '#f1f5f9'         : '#64748b',
-              background: isActive ? `${brandColor}18` : 'transparent',
-              borderLeft: isActive ? `2px solid ${brandColor}` : '2px solid transparent',
+              color:      isActive ? '#ffffff'         : '#c5d3e4',
+              background: isActive ? 'rgba(255,255,255,0.12)' : 'transparent',
+              borderLeft: isActive ? '2px solid #ffffff' : '2px solid transparent',
             })}
           >
             <Icon name={c.icon} size={14} style={{ marginRight: 8, flexShrink: 0 }} />
@@ -306,7 +302,7 @@ const ProfileDropdown = ({ user, brandColor, onLogout, loggingOut, onClose }) =>
 export default function SidebarLayout({
   navItems,
   brandColor,
-  title = 'Younovate',
+title = 'Youva OS',
   pageTitle,
 }) {
   const dispatch  = useAppDispatch();
@@ -324,17 +320,6 @@ export default function SidebarLayout({
 
   const profileRef  = useRef(null);
   const sidebarRef  = useRef(null);
-
-  // Inject Tabler CSS once
-  useEffect(() => {
-    if (!document.getElementById('tabler-icons-css')) {
-      const link = document.createElement('link');
-      link.id   = 'tabler-icons-css';
-      link.rel  = 'stylesheet';
-      link.href = TABLER_CDN;
-      document.head.appendChild(link);
-    }
-  }, []);
 
   // Close everything on route change
   useEffect(() => {
@@ -414,7 +399,7 @@ export default function SidebarLayout({
         >
           {/* Brand row */}
           <div className="yn-brand">
-            <div className="yn-brand-logo" style={{ background: resolvedColor }}>Y</div>
+            <div className="yn-brand-logo">Y</div>
             {!collapsed && <span className="yn-brand-text">{title}</span>}
             {/* Desktop: collapse toggle */}
             <button
@@ -548,18 +533,21 @@ export default function SidebarLayout({
 // ─── CSS factory (injects brand color as CSS variable) ───────────────────────
 function buildCSS(brandColor) {
   return `
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap');
 
 :root {
   --yn-brand:    ${brandColor};
-  --yn-sidebar:  #0F172A;
-  --yn-sidebar2: #1E293B;
-  --yn-text-1:   #F1F5F9;
-  --yn-text-2:   #94A3B8;
-  --yn-text-3:   #64748B;
-  --yn-border:   rgba(255,255,255,0.07);
-  --yn-radius:   10px;
-  --yn-font:     'DM Sans', system-ui, sans-serif;
+  --yn-sidebar:  #1f3d63;
+  --yn-sidebar2: #26486f;
+  --yn-sidebar-active: #48617f;
+  --yn-text-1:   #ffffff;
+  --yn-text-2:   #c5d3e4;
+  --yn-text-3:   #9badc4;
+  --yn-border:   rgba(255,255,255,0.14);
+  --yn-page-bg:  #f5f8fc;
+  --yn-line:     #dbe3ed;
+  --yn-radius:   8px;
+  --yn-font:     'Public Sans', system-ui, sans-serif;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -569,7 +557,7 @@ function buildCSS(brandColor) {
   height: 100vh;
   overflow: hidden;
   font-family: var(--yn-font);
-  background: #F8FAFC;
+  background: var(--yn-page-bg);
 }
 
 /* ── Backdrop ────────────────────────────────────────────────────────────── */
@@ -594,6 +582,7 @@ function buildCSS(brandColor) {
   transition: width 0.25s cubic-bezier(0.4,0,0.2,1);
   z-index: 50;
   position: relative;
+  border-right: 1px solid #c9d7e6;
 }
 .yn-sidebar.yn-collapsed { width: 64px; }
 
@@ -602,35 +591,34 @@ function buildCSS(brandColor) {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 18px 14px 16px;
+  padding: 26px 20px 22px;
   border-bottom: 1px solid var(--yn-border);
   flex-shrink: 0;
 }
 .yn-brand-logo {
-  width: 36px; height: 36px; flex-shrink: 0;
-  border-radius: var(--yn-radius);
-  display: flex; align-items: center; justify-content: center;
-  color: #fff; font-size: 16px; font-weight: 800;
+  display: none;
 }
 .yn-brand-text {
   color: var(--yn-text-1);
-  font-weight: 700; font-size: 15px;
+  font-weight: 800; font-size: 22px;
+  letter-spacing: 0;
+  text-transform: uppercase;
   flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .yn-collapse-btn {
   background: none; border: none; cursor: pointer;
-  color: var(--yn-text-3);
+  color: #d7e2ef;
   width: 28px; height: 28px;
   display: flex; align-items: center; justify-content: center;
   border-radius: 6px; flex-shrink: 0;
   transition: color 0.15s, background 0.15s;
 }
-.yn-collapse-btn:hover { color: var(--yn-text-2); background: rgba(255,255,255,0.07); }
+.yn-collapse-btn:hover { color: #fff; background: rgba(255,255,255,0.10); }
 
 /* Nav scroll */
 .yn-nav-scroll {
   flex: 1; overflow-y: auto; overflow-x: hidden;
-  padding: 8px 0;
+  padding: 12px 0;
   scrollbar-width: thin;
   scrollbar-color: var(--yn-sidebar2) transparent;
 }
@@ -639,22 +627,22 @@ function buildCSS(brandColor) {
 
 .yn-nav-section { padding: 4px 0; }
 .yn-section-label {
-  font-size: 10px; font-weight: 700; letter-spacing: 0.9px;
+  font-size: 12px; font-weight: 500; letter-spacing: 1.8px;
   text-transform: uppercase;
   color: var(--yn-text-3);
-  padding: 8px 16px 5px;
+  padding: 12px 16px 8px;
   white-space: nowrap; overflow: hidden;
 }
 
 /* Flat nav link */
 .yn-navlink {
   display: flex; align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
+  gap: 12px;
+  padding: 11px 16px;
   text-decoration: none;
-  font-size: 13.5px; font-weight: 500;
+  font-size: 15px; font-weight: 700;
   white-space: nowrap; overflow: hidden;
-  border-left: 3px solid var(--active-border, transparent);
+  border-left: 0 solid transparent;
   background: var(--active-bg, transparent);
   color: var(--active-color, #94a3b8);
   transition: background 0.15s, color 0.15s, border-color 0.15s;
@@ -662,15 +650,17 @@ function buildCSS(brandColor) {
   width: 100%;
   font-family: var(--yn-font);
 }
-.yn-navlink:hover { background: rgba(255,255,255,0.05); color: #cbd5e1; }
+.yn-navlink:hover { background: rgba(255,255,255,0.08); color: #ffffff; }
 .yn-navlink-btn { border: none; text-align: left; }
-.yn-navlink-icon { width: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.yn-navlink-icon { width: 24px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #7eb8d8; }
+.yn-navlink:hover .yn-navlink-icon { color: #ffffff; }
+.yn-navlink[style*="rgba(255,255,255,0.17)"] .yn-navlink-icon { color: #ffffff; }
 .yn-navlink-text { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 
 /* Badge pill */
 .yn-badge {
-  font-size: 10px; font-weight: 700;
-  background: #ef4444; color: #fff;
+  font-size: 11px; font-weight: 800;
+  background: #ef3b45; color: #fff;
   border-radius: 99px; padding: 1px 6px;
   flex-shrink: 0;
 }
@@ -683,15 +673,15 @@ function buildCSS(brandColor) {
 }
 .yn-sub-link {
   display: flex; align-items: center;
-  padding: 9px 14px 9px 44px;
-  font-size: 13px; font-weight: 500;
+  padding: 9px 14px 9px 52px;
+  font-size: 14px; font-weight: 650;
   text-decoration: none;
   border-left: 2px solid transparent;
   transition: background 0.15s, color 0.15s;
   white-space: nowrap; overflow: hidden;
   font-family: var(--yn-font);
 }
-.yn-sub-link:hover { background: rgba(255,255,255,0.05); color: #cbd5e1; }
+.yn-sub-link:hover { background: rgba(255,255,255,0.08); color: #ffffff; }
 .yn-sub-link-text { overflow: hidden; text-overflow: ellipsis; flex: 1; }
 
 /* Collapsed flyout */
@@ -699,13 +689,13 @@ function buildCSS(brandColor) {
 .yn-flyout {
   position: absolute;
   left: 100%; top: 0;
-  background: #1E293B;
+  background: #1f3d63;
   border: 1px solid rgba(255,255,255,0.1);
-  border-radius: var(--yn-radius);
+  border-radius: 8px;
   min-width: 180px;
   padding: 8px 0;
   z-index: 100;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  box-shadow: 0 16px 40px rgba(31,61,99,0.28);
   opacity: 0; pointer-events: none;
   transform: translateX(6px);
   transition: opacity 0.15s, transform 0.15s;
@@ -731,7 +721,7 @@ function buildCSS(brandColor) {
 /* Sidebar footer */
 .yn-sidebar-footer {
   border-top: 1px solid var(--yn-border);
-  padding: 12px;
+  padding: 14px 12px;
   flex-shrink: 0;
 }
 .yn-footer-user {
@@ -746,7 +736,7 @@ function buildCSS(brandColor) {
 .yn-footer-info { flex: 1; min-width: 0; overflow: hidden; }
 .yn-footer-name {
   margin: 0; color: var(--yn-text-1);
-  font-size: 13px; font-weight: 600;
+  font-size: 13px; font-weight: 700;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .yn-footer-role {
@@ -754,15 +744,15 @@ function buildCSS(brandColor) {
   font-size: 11px; text-transform: capitalize; margin-top: 1px;
 }
 .yn-footer-logout {
-  background: rgba(239,68,68,0.12);
-  border: 1px solid rgba(239,68,68,0.2);
-  color: #fca5a5;
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.16);
+  color: #ffffff;
   width: 34px; height: 34px;
   border-radius: 8px; cursor: pointer; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   transition: background 0.15s;
 }
-.yn-footer-logout:hover:not(:disabled) { background: rgba(239,68,68,0.25); }
+.yn-footer-logout:hover:not(:disabled) { background: rgba(255,255,255,0.18); }
 .yn-footer-logout:disabled { opacity: 0.6; cursor: not-allowed; }
 .yn-footer-logout-solo { width: 100%; border-radius: 8px; }
 
@@ -774,14 +764,14 @@ function buildCSS(brandColor) {
 
 /* Top bar */
 .yn-topbar {
-  height: 56px;
+  height: 72px;
   background: #fff;
-  border-bottom: 1px solid #E2E8F0;
+  border-bottom: 1px solid var(--yn-line);
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 20px; flex-shrink: 0; z-index: 30;
+  padding: 0 30px; flex-shrink: 0; z-index: 30;
 }
 .yn-topbar-left  { display: flex; align-items: center; gap: 12px; }
-.yn-topbar-right { display: flex; align-items: center; gap: 8px; }
+.yn-topbar-right { display: flex; align-items: center; gap: 14px; }
 
 .yn-hamburger {
   display: none;
@@ -794,19 +784,19 @@ function buildCSS(brandColor) {
 .yn-hamburger:hover { background: #F1F5F9; }
 
 .yn-page-title {
-  font-size: 16px; font-weight: 700; color: #0F172A; margin: 0;
+  font-size: 18px; font-weight: 800; color: #050a16; margin: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   max-width: 280px;
 }
 
 .yn-icon-btn {
   width: 36px; height: 36px;
-  background: none; border: 1px solid #E2E8F0;
-  border-radius: 9px; cursor: pointer;
+  background: none; border: none;
+  border-radius: 50%; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   color: #64748B; transition: background 0.15s;
 }
-.yn-icon-btn:hover { background: #F1F5F9; }
+.yn-icon-btn:hover { background: #edf3f9; }
 
 .yn-notif-wrap { position: relative; }
 .yn-notif-dot {
@@ -820,10 +810,10 @@ function buildCSS(brandColor) {
 .yn-profile-wrap { position: relative; }
 .yn-topbar-avatar {
   display: flex; align-items: center; gap: 5px;
-  height: 36px; padding: 0 10px 0 4px;
+  width: 42px; height: 42px; padding: 0;
   border-radius: 99px;
   border: none; cursor: pointer; color: #fff;
-  font-size: 12px; font-weight: 700;
+  font-size: 15px; font-weight: 800;
   font-family: var(--yn-font);
   transition: opacity 0.15s;
 }
@@ -834,16 +824,16 @@ function buildCSS(brandColor) {
   display: flex; align-items: center; justify-content: center;
   font-size: 11px; font-weight: 700;
 }
-.yn-avatar-caret { transition: transform 0.2s; display: flex; align-items: center; }
+.yn-avatar-caret { display: none; }
 
 /* Profile dropdown */
 .yn-profile-dropdown {
   position: absolute; top: calc(100% + 8px); right: 0;
   width: 240px;
-  background: #1E293B;
-  border: 1px solid rgba(255,255,255,0.1);
+  background: #ffffff;
+  border: 1px solid var(--yn-line);
   border-radius: var(--yn-radius);
-  box-shadow: 0 16px 48px rgba(0,0,0,0.4);
+  box-shadow: 0 18px 45px rgba(31,61,99,0.18);
   z-index: 200;
   animation: yn-dropdown-in 0.18s cubic-bezier(0.34,1.3,0.64,1);
   overflow: hidden;
@@ -864,7 +854,7 @@ function buildCSS(brandColor) {
 }
 .yn-profile-info { min-width: 0; }
 .yn-profile-name {
-  margin: 0; color: #F1F5F9;
+  margin: 0; color: #172033;
   font-size: 14px; font-weight: 700;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -874,7 +864,7 @@ function buildCSS(brandColor) {
   font-weight: 600; margin-top: 2px;
 }
 .yn-profile-email {
-  margin: 0; color: var(--yn-text-3);
+  margin: 0; color: #657691;
   font-size: 11px; margin-top: 2px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -882,11 +872,11 @@ function buildCSS(brandColor) {
 .yn-profile-action {
   width: 100%; display: flex; align-items: center; gap: 10px;
   padding: 10px 10px; border: none; border-radius: 8px;
-  background: none; cursor: pointer; color: var(--yn-text-2);
+  background: none; cursor: pointer; color: #657691;
   font-size: 13px; font-weight: 500; font-family: var(--yn-font);
   text-align: left; transition: background 0.15s, color 0.15s;
 }
-.yn-profile-action:hover { background: rgba(255,255,255,0.07); color: var(--yn-text-1); }
+.yn-profile-action:hover { background: #f4f8fc; color: #172033; }
 .yn-profile-mentor-badge {
   display: inline-flex; align-items: center; gap: 5px;
   background: rgba(${brandColor.slice(1).match(/.{2}/g).map(h=>parseInt(h,16)).join(',')},0.18);
@@ -896,21 +886,21 @@ function buildCSS(brandColor) {
   margin: 6px 10px 2px;
 }
 .yn-profile-divider {
-  height: 1px; background: var(--yn-border); margin: 8px 0;
+  height: 1px; background: var(--yn-line); margin: 8px 0;
 }
 .yn-profile-logout {
   width: 100%; display: flex; align-items: center; gap: 10px;
   padding: 12px 18px 14px;
   border: none; background: none; cursor: pointer;
-  color: #FCA5A5; font-size: 13px; font-weight: 600;
+  color: #d92d28; font-size: 13px; font-weight: 700;
   font-family: var(--yn-font); text-align: left;
   transition: background 0.15s;
 }
-.yn-profile-logout:hover:not(:disabled) { background: rgba(239,68,68,0.1); }
+.yn-profile-logout:hover:not(:disabled) { background: #fff0f0; }
 .yn-profile-logout:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* Page content */
-.yn-content { flex: 1; overflow-y: auto; overflow-x: hidden; }
+.yn-content { flex: 1; overflow-y: auto; overflow-x: hidden; background: var(--yn-page-bg); }
 
 /* ── Visibility helpers ───────────────────────────────────────────────────── */
 .yn-desktop-only { display: flex; }
@@ -930,11 +920,43 @@ function buildCSS(brandColor) {
   .yn-desktop-only { display: none; }
   .yn-mobile-only  { display: flex; }
   .yn-main { width: 100%; }
+  .yn-topbar {
+    height: 62px;
+    padding: 0 16px;
+  }
+  .yn-page-title {
+    max-width: calc(100vw - 170px);
+    font-size: 16px;
+  }
+  .yn-topbar-right {
+    gap: 8px;
+  }
+  .yn-icon-btn {
+    width: 34px;
+    height: 34px;
+  }
+  .yn-topbar-avatar {
+    width: 38px;
+    height: 38px;
+    font-size: 13px;
+  }
 
   /* Profile dropdown: full-width on mobile */
   .yn-profile-dropdown {
     width: min(280px, calc(100vw - 24px));
     right: 0;
+  }
+}
+
+@media (max-width: 420px) {
+  .yn-topbar {
+    padding: 0 12px;
+  }
+  .yn-icon-btn[aria-label="Search"] {
+    display: none;
+  }
+  .yn-page-title {
+    max-width: calc(100vw - 126px);
   }
 }
 

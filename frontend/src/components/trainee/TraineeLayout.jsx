@@ -35,5 +35,6 @@ const NAV = [
 ];
 
 export default function TraineeLayout() {
-  return <SidebarLayout navItems={NAV} title="Younovate LMS" />;
+  return <SidebarLayout navItems={NAV} title="Youva OS" />;
 }
+

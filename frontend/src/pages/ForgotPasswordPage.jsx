@@ -1,7 +1,8 @@
 // src/pages/ForgotPasswordPage.jsx
-// Younovate LMS — Forgot Password (4-step flow)
+// Youva OS — Forgot Password (4-step flow)
 // Step 1: Email  →  Step 2: OTP  →  Step 3: New Password  →  Step 4: Success
 // Mobile-first · Fully responsive · Matches LoginPage design system
+
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -85,8 +86,8 @@ function OtpInput({ value, onChange }) {
           onPaste={handlePaste}
           style={{
             ...s.otpBox,
-            borderColor: value[i] ? '#6366f1' : '#1e2a3f',
-            color:        value[i] ? '#a5b4fc' : '#f1f5f9',
+            borderColor: value[i] ? '#7ba8d6' : '#d7e0eb',
+            color:        value[i] ? '#1f3d63' : '#050a16',
           }}
           aria-label={`Digit ${i + 1}`}
         />
@@ -206,7 +207,7 @@ export default function ForgotPasswordPage() {
   };
 
   // ── Progress bar widths ───────────────────────────────────────────────────
-  const progressFill = (n) => step >= n ? '#6366f1' : '#1e2a3f';
+  const progressFill = (n) => step >= n ? '#1f3d63' : '#dbe3ed';
 
   return (
     <>
@@ -456,27 +457,28 @@ export default function ForgotPasswordPage() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap');
 
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   .fp-page {
     min-height: 100vh;
-    background: #0A0F1E;
+    background: linear-gradient(115deg, #1f3d63 0%, #315f83 58%, #4b8eaa 100%);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: 'Public Sans', system-ui, -apple-system, sans-serif;
     padding: 16px;
   }
 
   .fp-card {
     width: 100%;
-    max-width: 400px;
-    background: #111827;
-    border: 1px solid #1e2a3f;
-    border-radius: 24px;
-    padding: 28px 32px 36px;
+    max-width: 476px;
+    background: #ffffff;
+    border: 1px solid rgba(255,255,255,0.72);
+    border-radius: 18px;
+    padding: 34px 50px 44px;
+    box-shadow: 0 26px 70px rgba(20,46,75,0.28);
   }
 
   /* Progress */
@@ -499,7 +501,7 @@ const CSS = `
     gap: 6px;
     background: none;
     border: none;
-    color: #6366f1;
+    color: #2f6f9b;
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
@@ -507,7 +509,7 @@ const CSS = `
     padding: 10px 0 0;
     margin-bottom: 4px;
   }
-  .fp-back:hover { color: #818cf8; }
+  .fp-back:hover { color: #1f3d63; }
 
   /* Step wrapper */
   .fp-step {
@@ -520,12 +522,12 @@ const CSS = `
     width: 64px;
     height: 64px;
     border-radius: 20px;
-    background: #1a2235;
-    border: 1.5px solid #1e2a3f;
+    background: #eef5fb;
+    border: 1px solid #d7e0eb;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #6366f1;
+    color: #1f3d63;
     margin: 20px auto 0;
   }
 
@@ -533,14 +535,14 @@ const CSS = `
   .fp-title {
     font-size: 20px;
     font-weight: 700;
-    color: #f1f5f9;
+    color: #1f3d63;
     text-align: center;
     margin-top: 16px;
     letter-spacing: -0.3px;
   }
   .fp-sub {
     font-size: 13px;
-    color: #64748b;
+    color: #536987;
     text-align: center;
     margin-top: 6px;
     line-height: 1.6;
@@ -550,11 +552,11 @@ const CSS = `
   /* Labels */
   .fp-label {
     display: block;
-    font-size: 11px;
-    font-weight: 600;
-    color: #64748b;
-    letter-spacing: 0.6px;
-    text-transform: uppercase;
+    font-size: 14px;
+    font-weight: 700;
+    color: #536987;
+    letter-spacing: 0;
+    text-transform: none;
     margin-bottom: 7px;
   }
 
@@ -568,7 +570,7 @@ const CSS = `
   .fp-input-icon {
     position: absolute;
     left: 14px;
-    color: #475569;
+    color: #7a8ba4;
     font-size: 16px;
     pointer-events: none;
     line-height: 1;
@@ -576,18 +578,18 @@ const CSS = `
   .fp-input {
     width: 100%;
     padding: 13px 14px 13px 42px;
-    background: #1a2235;
-    border: 1.5px solid #1e2a3f;
-    border-radius: 12px;
+    background: #ffffff;
+    border: 1px solid #d7e0eb;
+    border-radius: 8px;
     font-size: 14px;
-    color: #f1f5f9;
+    color: #050a16;
     font-family: inherit;
     outline: none;
     transition: border-color 0.2s, box-shadow 0.2s;
     -webkit-appearance: none;
   }
-  .fp-input::placeholder  { color: #374151; }
-  .fp-input:focus         { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.15); }
+  .fp-input::placeholder  { color: #9aa9bb; }
+  .fp-input:focus         { border-color: #7ba8d6; box-shadow: 0 0 0 3px rgba(63,125,160,.16); }
   .fp-input:disabled      { opacity: 0.5; }
   .fp-input-err           { border-color: #ef4444 !important; }
   .fp-input-pw            { padding-right: 44px; }
@@ -598,7 +600,7 @@ const CSS = `
     right: 13px;
     background: none;
     border: none;
-    color: #475569;
+    color: #7a8ba4;
     cursor: pointer;
     padding: 4px;
     font-size: 16px;
@@ -606,7 +608,7 @@ const CSS = `
     display: flex;
     align-items: center;
   }
-  .fp-eye:hover { color: #94a3b8; }
+  .fp-eye:hover { color: #1f3d63; }
 
   /* Error message */
   .fp-err-msg {
@@ -625,19 +627,19 @@ const CSS = `
   .fp-otp-box {
     width: 44px;
     height: 52px;
-    background: #1a2235;
-    border: 1.5px solid #1e2a3f;
-    border-radius: 12px;
+    background: #ffffff;
+    border: 1px solid #d7e0eb;
+    border-radius: 8px;
     font-size: 22px;
     font-weight: 700;
     text-align: center;
     outline: none;
     font-family: inherit;
     -webkit-appearance: none;
-    caret-color: #6366f1;
+    caret-color: #1f3d63;
     transition: border-color 0.15s;
   }
-  .fp-otp-box:focus { box-shadow: 0 0 0 3px rgba(99,102,241,.15); }
+  .fp-otp-box:focus { box-shadow: 0 0 0 3px rgba(63,125,160,.16); }
 
   /* Timer row */
   .fp-timer-row {
@@ -646,11 +648,11 @@ const CSS = `
     justify-content: space-between;
     margin-bottom: 20px;
   }
-  .fp-timer { font-size: 13px; color: #64748b; }
+  .fp-timer { font-size: 13px; color: #657691; }
 
   .fp-resend-btn {
     font-size: 13px;
-    color: #6366f1;
+    color: #2f6f9b;
     background: none;
     border: none;
     cursor: pointer;
@@ -659,13 +661,13 @@ const CSS = `
     padding: 0;
     transition: color 0.2s;
   }
-  .fp-resend-btn:disabled { color: #374151; cursor: not-allowed; }
-  .fp-resend-btn:not(:disabled):hover { color: #818cf8; }
+  .fp-resend-btn:disabled { color: #9aa9bb; cursor: not-allowed; }
+  .fp-resend-btn:not(:disabled):hover { color: #1f3d63; }
 
   /* Strength bar */
   .fp-strength-track {
     height: 4px;
-    background: #1e2a3f;
+    background: #dbe3ed;
     border-radius: 4px;
     margin: -8px 0 4px;
     overflow: hidden;
@@ -686,10 +688,10 @@ const CSS = `
   .fp-btn-primary {
     width: 100%;
     padding: 14px;
-    background: #6366f1;
+    background: #1f3d63;
     color: #fff;
     border: none;
-    border-radius: 12px;
+    border-radius: 8px;
     font-size: 15px;
     font-weight: 600;
     cursor: pointer;
@@ -703,8 +705,8 @@ const CSS = `
     gap: 8px;
     min-height: 50px;
   }
-  .fp-btn-primary:hover:not(:disabled)  { background: #5558e8; }
-  .fp-btn-primary:active:not(:disabled) { background: #4f46e5; }
+  .fp-btn-primary:hover:not(:disabled)  { background: #294c76; }
+  .fp-btn-primary:active:not(:disabled) { background: #173254; }
   .fp-btn-primary:disabled              { opacity: 0.6; cursor: not-allowed; }
 
   /* Ghost button */
@@ -712,9 +714,9 @@ const CSS = `
     width: 100%;
     padding: 13px;
     background: transparent;
-    color: #6366f1;
-    border: 1.5px solid #1e2a3f;
-    border-radius: 12px;
+    color: #2f6f9b;
+    border: 1px solid #d7e0eb;
+    border-radius: 8px;
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
@@ -722,7 +724,7 @@ const CSS = `
     transition: background 0.2s;
     min-height: 48px;
   }
-  .fp-btn-ghost:hover:not(:disabled) { background: #1a2235; }
+  .fp-btn-ghost:hover:not(:disabled) { background: #eef5fb; }
   .fp-btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
 
   /* Spinner */
@@ -755,11 +757,11 @@ const CSS = `
   .fp-back-login {
     text-align: center;
     font-size: 13px;
-    color: #475569;
+    color: #657691;
     margin-top: 4px;
   }
   .fp-link-btn {
-    color: #6366f1;
+    color: #2f6f9b;
     background: none;
     border: none;
     cursor: pointer;
@@ -768,7 +770,7 @@ const CSS = `
     font-weight: 600;
     padding: 0;
   }
-  .fp-link-btn:hover { color: #818cf8; }
+  .fp-link-btn:hover { color: #1f3d63; }
 
   /* ── Mobile: full-screen ── */
   @media (max-width: 440px) {
@@ -807,16 +809,16 @@ const s = {
   otpBox: {
     width: 44,
     height: 52,
-    background: '#1a2235',
-    border: '1.5px solid',
-    borderRadius: 12,
+    background: '#ffffff',
+    border: '1px solid',
+    borderRadius: 8,
     fontSize: 22,
     fontWeight: 700,
     textAlign: 'center',
     outline: 'none',
     fontFamily: 'inherit',
     WebkitAppearance: 'none',
-    caretColor: '#6366f1',
+    caretColor: '#1f3d63',
     transition: 'border-color 0.15s',
   },
 };

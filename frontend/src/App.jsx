@@ -24,9 +24,22 @@ import AdminTrainees     from './pages/admin/Trainees';
 import AdminTrainers     from './pages/admin/Trainers';
 import AdminBatches      from './pages/admin/Batches';
 import AdminSessions     from './pages/admin/Sessions';
+import AdminLmsContent   from './pages/admin/LmsContent';
+import AdminAssignments  from './pages/admin/Assignments';
 import AdminRegistrations from './pages/admin/Registrations';
+import AdminPrograms     from './pages/admin/Programs';
+import AdminUsers        from './pages/admin/Users';
+import AdminSettings     from './pages/admin/Settings';
+import AdminReports      from './pages/admin/Reports';
+import AdminSupport      from './pages/admin/Support';
+
+
+
+
+
 
 import TrainerDashboard  from './pages/trainer/Dashboard';
+
 import TrainerSessions   from './pages/trainer/Sessions';
 import TrainerAttendance from './pages/trainer/Attendance';
 import TrainerAssignments from './pages/trainer/Assignments';
@@ -87,9 +100,19 @@ function App() {
             <Route path="trainers"      element={<AdminTrainers />} />
             <Route path="batches"       element={<AdminBatches />} />
             <Route path="sessions"      element={<AdminSessions />} />
+            <Route path="lms"           element={<AdminLmsContent />} />
+            <Route path="assignments"  element={<AdminAssignments />} />
             <Route path="registrations" element={<AdminRegistrations />} />
+            <Route path="programs"      element={<AdminPrograms />} />
+            <Route path="users"         element={<AdminUsers />} />
+            <Route path="settings"     element={<AdminSettings />} />
+            <Route path="reports"      element={<AdminReports />} />
+            <Route path="support"      element={<AdminSupport />} />
             <Route index element={<Navigate to="dashboard" replace />} />
+
+
           </Route>
+
         </Route>
 
         {/* Trainer */}
