@@ -94,6 +94,10 @@ const ProgressRow = ({ label, pct, color }) => (
   </div>
 );
 
+
+
+
+
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 const Badge = ({ status }) => {
   const s = STATUS[status] || { bg: C.gray100, color: C.gray500 };
