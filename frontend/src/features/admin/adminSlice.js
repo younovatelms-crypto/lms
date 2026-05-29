@@ -12,11 +12,13 @@ const authHeader = (getState) => ({
   headers: { Authorization: `Bearer ${getState().auth.token}` },
 });
 
+
 // =============================================================================
 // THUNKS — all declared before createSlice
 // =============================================================================
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
+
 export const fetchDashboard = createAsyncThunk(
   'admin/fetchDashboard',
   async (_, { getState, rejectWithValue }) => {
