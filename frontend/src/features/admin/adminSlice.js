@@ -43,6 +43,7 @@ export const fetchUsers = createAsyncThunk(
         ...authHeader(getState),
         params,
       });
+      console.log('fetchUsers API response:', data); // Debug log
       return data.data || data;
     } catch (err) {
       return rejectWithValue(
@@ -90,6 +91,62 @@ export const fetchTrainers = createAsyncThunk(
   }
 );
 
+// ─── Create user ──────────────────────────────────────────────────────────────
+export const createUser = createAsyncThunk(
+  'admin/createUser',
+  async (userData, { getState, rejectWithValue }) => {
+    try {
+      const { data } = await axios.post(
+        `${API}/api/admin/users`,
+        userData,
+        authHeader(getState)
+      );
+      return data.data || data;
+    } catch (err) {
+      return rejectWithValue(
+        err.response?.data?.message || 'Failed to create user.'
+      );
+    }
+  }
+);
+
+// ─── Get single user ──────────────────────────────────────────────────────────
+export const getUser = createAsyncThunk(
+  'admin/getUser',
+  async (userId, { getState, rejectWithValue }) => {
+    try {
+      const { data } = await axios.get(
+        `${API}/api/admin/users/${userId}`,
+        authHeader(getState)
+      );
+      return data.data || data;
+    } catch (err) {
+      return rejectWithValue(
+        err.response?.data?.message || 'Failed to fetch user.'
+      );
+    }
+  }
+);
+
+// ─── Update user ──────────────────────────────────────────────────────────────
+export const updateUser = createAsyncThunk(
+  'admin/updateUser',
+  async ({ userId, userData }, { getState, rejectWithValue }) => {
+    try {
+      const { data } = await axios.put(
+        `${API}/api/admin/users/${userId}`,
+        userData,
+        authHeader(getState)
+      );
+      return data.data || data;
+    } catch (err) {
+      return rejectWithValue(
+        err.response?.data?.message || 'Failed to update user.'
+      );
+    }
+  }
+);
+
 // ─── Toggle user active/inactive ─────────────────────────────────────────────
 export const toggleUserStatus = createAsyncThunk(
   'admin/toggleUserStatus',
@@ -104,6 +161,24 @@ export const toggleUserStatus = createAsyncThunk(
     } catch (err) {
       return rejectWithValue(
         err.response?.data?.message || 'Failed to update user status.'
+      );
+    }
+  }
+);
+
+// ─── Delete user ──────────────────────────────────────────────────────────────
+export const deleteUser = createAsyncThunk(
+  'admin/deleteUser',
+  async (userId, { getState, rejectWithValue }) => {
+    try {
+      const { data } = await axios.delete(
+        `${API}/api/admin/users/${userId}`,
+        authHeader(getState)
+      );
+      return { userId, message: data.message };
+    } catch (err) {
+      return rejectWithValue(
+        err.response?.data?.message || 'Failed to delete user.'
       );
     }
   }
@@ -183,6 +258,11 @@ const initialState = {
   usersMeta:   null,
   usersStatus: 'idle',
   usersError:  null,
+  
+  // Single user
+  selectedUser: null,
+  selectedUserStatus: 'idle',
+  selectedUserError: null,
 
   // Trainees (role=trainee)
   trainees:       [],
@@ -250,9 +330,11 @@ const adminSlice = createSlice({
         state.usersError  = null;
       })
       .addCase(fetchUsers.fulfilled, (state, action) => {
+        console.log('fetchUsers fulfilled payload:', action.payload); // Debug log
         state.usersStatus = 'succeeded';
         state.users       = action.payload.users  || action.payload;
         state.usersMeta   = action.payload.meta   || null;
+        console.log('Users stored in state:', state.users); // Debug log
       })
       .addCase(fetchUsers.rejected, (state, action) => {
         state.usersStatus = 'failed';
@@ -289,6 +371,47 @@ const adminSlice = createSlice({
         state.trainersError  = action.payload;
       })
 
+      // ── createUser ─────────────────────────────────────────────────────────
+      .addCase(createUser.fulfilled, (state, action) => {
+        const newUser = action.payload;
+        state.users.unshift(newUser);
+        if (newUser.role === 'trainee') {
+          state.trainees.unshift(newUser);
+        } else if (newUser.role === 'trainer') {
+          state.trainers.unshift(newUser);
+        }
+      })
+
+      // ── getUser ────────────────────────────────────────────────────────────
+      .addCase(getUser.pending, (state) => {
+        state.selectedUserStatus = 'loading';
+        state.selectedUserError = null;
+      })
+      .addCase(getUser.fulfilled, (state, action) => {
+        state.selectedUserStatus = 'succeeded';
+        state.selectedUser = action.payload;
+      })
+      .addCase(getUser.rejected, (state, action) => {
+        state.selectedUserStatus = 'failed';
+        state.selectedUserError = action.payload;
+      })
+
+      // ── updateUser ─────────────────────────────────────────────────────────
+      .addCase(updateUser.fulfilled, (state, action) => {
+        const updated = action.payload;
+        const id = String(updated._id);
+        const patch = (arr) => {
+          const i = arr.findIndex(u => String(u._id) === id);
+          if (i !== -1) arr[i] = updated;
+        };
+        patch(state.users);
+        patch(state.trainees);
+        patch(state.trainers);
+        if (state.selectedUser && String(state.selectedUser._id) === id) {
+          state.selectedUser = updated;
+        }
+      })
+
       // ── toggleUserStatus ───────────────────────────────────────────────────
       .addCase(toggleUserStatus.fulfilled, (state, action) => {
         const updated = action.payload;
@@ -301,6 +424,15 @@ const adminSlice = createSlice({
         patch(state.users);
         patch(state.trainees);
         patch(state.trainers);
+      })
+
+      // ── deleteUser ─────────────────────────────────────────────────────────
+      .addCase(deleteUser.fulfilled, (state, action) => {
+        const { userId } = action.payload;
+        const id = String(userId);
+        state.users = state.users.filter(u => String(u._id) !== id);
+        state.trainees = state.trainees.filter(u => String(u._id) !== id);
+        state.trainers = state.trainers.filter(u => String(u._id) !== id);
       })
 
       // ── fetchBatches ───────────────────────────────────────────────────────

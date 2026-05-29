@@ -10,51 +10,215 @@ import {
 const Trainers = () => {
   const dispatch = useAppDispatch();
   const trainers = useAppSelector(selectAllTrainers);
-  const status   = useAppSelector(selectAdminStatus);
-  const error    = useAppSelector(selectAdminError);
+  const status = useAppSelector(selectAdminStatus);
+  const error = useAppSelector(selectAdminError);
 
   useEffect(() => {
     dispatch(fetchTrainers());
   }, [dispatch]);
 
-  if (status === 'loading') return <div className="p-6 text-gray-500">Loading trainers…</div>;
-  if (status === 'failed')  return <div className="p-6 text-red-500">Error: {error}</div>;
+  if (status === 'loading') {
+    return (
+      <div style={{ 
+        padding: window.innerWidth <= 768 ? '16px 20px' : '32px 36px', 
+        fontFamily: 'Inter, system-ui, sans-serif',
+        background: '#F8FAFC',
+        minHeight: '100vh'
+      }}>
+        <div style={{ height: 28, width: 220, marginBottom: 8, background: 'linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%)', borderRadius: 8 }} />
+        <div style={{ height: 14, width: 300, marginBottom: 28, background: 'linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%)', borderRadius: 8 }} />
+        <div style={{ height: 400, background: 'linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%)', borderRadius: 16 }} />
+      </div>
+    );
+  }
+
+  if (status === 'failed') {
+    return (
+      <div style={{ 
+        padding: window.innerWidth <= 768 ? '16px 20px' : '32px 36px', 
+        fontFamily: 'Inter, system-ui, sans-serif',
+        background: '#F8FAFC',
+        minHeight: '100vh'
+      }}>
+        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12, padding: 20 }}>
+          <p style={{ color: '#B91C1C', fontWeight: 600, margin: '0 0 4px' }}>Error loading trainers</p>
+          <p style={{ color: '#B91C1C', fontSize: 13, margin: 0 }}>{error}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-6">Trainers</h1>
+    <div style={{ 
+      padding: window.innerWidth <= 768 ? '16px 20px' : '32px 36px', 
+      fontFamily: 'Inter, system-ui, sans-serif',
+      background: '#F8FAFC',
+      minHeight: '100vh'
+    }}>
+      <div style={{ marginBottom: window.innerWidth <= 768 ? 20 : 28 }}>
+        <h1 style={{ 
+          fontSize: window.innerWidth <= 768 ? 22 : 28, 
+          fontWeight: 800, 
+          marginBottom: 6, 
+          color: '#0F172A',
+          letterSpacing: '-0.5px'
+        }}>
+          Trainers ({trainers.length})
+        </h1>
+        <p style={{ 
+          margin: 0, 
+          color: '#64748B', 
+          fontSize: window.innerWidth <= 768 ? 13 : 14,
+          fontWeight: 500
+        }}>
+          Manage trainer profiles and their specializations.
+        </p>
+      </div>
+
       {trainers.length === 0 ? (
-        <p className="text-gray-500">No trainers found.</p>
+        <div style={{
+          background: '#ffffff',
+          border: '1px solid #E2E8F0',
+          borderRadius: 16,
+          padding: window.innerWidth <= 768 ? 32 : 48,
+          textAlign: 'center',
+          boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 8px 24px rgba(30,58,95,0.08)',
+        }}>
+          <p style={{ color: '#64748B', fontSize: window.innerWidth <= 768 ? 13 : 14, margin: 0 }}>No trainers found.</p>
+        </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600">#</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600">Name</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600">Email</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600">Specialization</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {trainers.map((trainer, idx) => (
-                <tr key={trainer._id || idx} className="border-t border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm text-gray-700">{idx + 1}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{trainer.name || '—'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{trainer.email || '—'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{trainer.specialization || '—'}</td>
-                  <td className="px-4 py-3 text-sm">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      trainer.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      {trainer.status || 'N/A'}
-                    </span>
-                  </td>
+        <div style={{
+          background: '#ffffff',
+          border: '1px solid #E2E8F0',
+          borderRadius: 16,
+          boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 8px 24px rgba(30,58,95,0.08)',
+          overflow: 'hidden'
+        }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ 
+              width: '100%', 
+              borderCollapse: 'collapse', 
+              minWidth: window.innerWidth <= 768 ? '500px' : '640px'
+            }}>
+              <thead>
+                <tr style={{ background: '#F8FAFC' }}>
+                  <th style={{ 
+                    padding: window.innerWidth <= 768 ? '8px 12px' : '12px 16px', 
+                    textAlign: 'left', 
+                    fontSize: window.innerWidth <= 768 ? 10 : 11, 
+                    fontWeight: 700, 
+                    color: '#64748B', 
+                    letterSpacing: '0.7px', 
+                    textTransform: 'uppercase', 
+                    borderBottom: '1px solid #E2E8F0' 
+                  }}>#</th>
+                  <th style={{ 
+                    padding: window.innerWidth <= 768 ? '8px 12px' : '12px 16px', 
+                    textAlign: 'left', 
+                    fontSize: window.innerWidth <= 768 ? 10 : 11, 
+                    fontWeight: 700, 
+                    color: '#64748B', 
+                    letterSpacing: '0.7px', 
+                    textTransform: 'uppercase', 
+                    borderBottom: '1px solid #E2E8F0' 
+                  }}>Name</th>
+                  <th style={{ 
+                    padding: window.innerWidth <= 768 ? '8px 12px' : '12px 16px', 
+                    textAlign: 'left', 
+                    fontSize: window.innerWidth <= 768 ? 10 : 11, 
+                    fontWeight: 700, 
+                    color: '#64748B', 
+                    letterSpacing: '0.7px', 
+                    textTransform: 'uppercase', 
+                    borderBottom: '1px solid #E2E8F0',
+                    display: window.innerWidth <= 480 ? 'none' : 'table-cell'
+                  }}>Email</th>
+                  <th style={{ 
+                    padding: window.innerWidth <= 768 ? '8px 12px' : '12px 16px', 
+                    textAlign: 'left', 
+                    fontSize: window.innerWidth <= 768 ? 10 : 11, 
+                    fontWeight: 700, 
+                    color: '#64748B', 
+                    letterSpacing: '0.7px', 
+                    textTransform: 'uppercase', 
+                    borderBottom: '1px solid #E2E8F0',
+                    display: window.innerWidth <= 600 ? 'none' : 'table-cell'
+                  }}>Specialization</th>
+                  <th style={{ 
+                    padding: window.innerWidth <= 768 ? '8px 12px' : '12px 16px', 
+                    textAlign: 'left', 
+                    fontSize: window.innerWidth <= 768 ? 10 : 11, 
+                    fontWeight: 700, 
+                    color: '#64748B', 
+                    letterSpacing: '0.7px', 
+                    textTransform: 'uppercase', 
+                    borderBottom: '1px solid #E2E8F0' 
+                  }}>Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {trainers.map((trainer, idx) => (
+                  <tr key={trainer._id || idx} style={{ borderBottom: '1px solid #E2E8F0' }}>
+                    <td style={{ 
+                      padding: window.innerWidth <= 768 ? '8px 12px' : '12px 16px', 
+                      fontSize: window.innerWidth <= 768 ? 12 : 13, 
+                      color: '#64748B' 
+                    }}>{idx + 1}</td>
+                    <td style={{ 
+                      padding: window.innerWidth <= 768 ? '8px 12px' : '12px 16px', 
+                      fontSize: window.innerWidth <= 768 ? 12 : 13, 
+                      color: '#0F172A', 
+                      fontWeight: 600 
+                    }}>
+                      <div style={{
+                        maxWidth: window.innerWidth <= 768 ? '120px' : 'none',
+                        overflow: window.innerWidth <= 768 ? 'hidden' : 'visible',
+                        textOverflow: window.innerWidth <= 768 ? 'ellipsis' : 'clip',
+                        whiteSpace: window.innerWidth <= 768 ? 'nowrap' : 'normal'
+                      }}>
+                        {trainer.name || '—'}
+                      </div>
+                    </td>
+                    <td style={{ 
+                      padding: window.innerWidth <= 768 ? '8px 12px' : '12px 16px', 
+                      fontSize: window.innerWidth <= 768 ? 12 : 13, 
+                      color: '#64748B',
+                      display: window.innerWidth <= 480 ? 'none' : 'table-cell'
+                    }}>
+                      <div style={{
+                        maxWidth: window.innerWidth <= 768 ? '150px' : 'none',
+                        overflow: window.innerWidth <= 768 ? 'hidden' : 'visible',
+                        textOverflow: window.innerWidth <= 768 ? 'ellipsis' : 'clip',
+                        whiteSpace: window.innerWidth <= 768 ? 'nowrap' : 'normal'
+                      }}>
+                        {trainer.email || '—'}
+                      </div>
+                    </td>
+                    <td style={{ 
+                      padding: window.innerWidth <= 768 ? '8px 12px' : '12px 16px', 
+                      fontSize: window.innerWidth <= 768 ? 12 : 13, 
+                      color: '#64748B',
+                      display: window.innerWidth <= 600 ? 'none' : 'table-cell'
+                    }}>{trainer.specialization || '—'}</td>
+                    <td style={{ padding: window.innerWidth <= 768 ? '8px 12px' : '12px 16px' }}>
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        padding: window.innerWidth <= 768 ? '2px 8px' : '3px 10px',
+                        borderRadius: 999,
+                        fontSize: window.innerWidth <= 768 ? 10 : 11,
+                        fontWeight: 700,
+                        background: trainer.status === 'active' ? '#DCFCE7' : '#F1F5F9',
+                        color: trainer.status === 'active' ? '#15803D' : '#475569'
+                      }}>
+                        {trainer.status || 'N/A'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
