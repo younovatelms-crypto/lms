@@ -5,9 +5,6 @@ import axios from 'axios';
 const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
 // ─── Auth Header ──────────────────────────────────────────────────────────────
-// FIXED: reads token from state.auth.token — exactly like your adminSlice does.
-// No more localStorage guessing. No more "Not authenticated" errors.
-
 const authHeader = (getState) => ({
   headers: { Authorization: `Bearer ${getState().auth.token}` },
 });
@@ -15,7 +12,6 @@ const authHeader = (getState) => ({
 // ─── Thunks ───────────────────────────────────────────────────────────────────
 
 // GET /api/trainer/dashboard
-// Response: { upcomingSessions[], liveSessions[], pendingGrades, totalStudents, trainer:{} }
 export const fetchTrainerDashboard = createAsyncThunk(
   'trainer/fetchTrainerDashboard',
   async (_, { getState, rejectWithValue }) => {
@@ -32,7 +28,6 @@ export const fetchTrainerDashboard = createAsyncThunk(
 );
 
 // GET /api/trainer/sessions
-// Response: { sessions: [{ _id, title, batchId:{_id,name}, scheduledAt, status, sessionType, topics[] }] }
 export const fetchTrainerSessions = createAsyncThunk(
   'trainer/fetchTrainerSessions',
   async (_, { getState, rejectWithValue }) => {
@@ -49,7 +44,6 @@ export const fetchTrainerSessions = createAsyncThunk(
 );
 
 // GET /api/trainer/assignments
-// Response: { assignments: [{ _id, title, batchId, dueDate, submissions:[] }] }
 export const fetchTrainerAssignments = createAsyncThunk(
   'trainer/fetchTrainerAssignments',
   async (_, { getState, rejectWithValue }) => {
@@ -66,7 +60,6 @@ export const fetchTrainerAssignments = createAsyncThunk(
 );
 
 // GET /api/trainer/students
-// Response: { students: [{ _id, name, email, batchId, placementStatus, averageScore, attendance }] }
 export const fetchTrainerStudents = createAsyncThunk(
   'trainer/fetchTrainerStudents',
   async (_, { getState, rejectWithValue }) => {
@@ -83,8 +76,6 @@ export const fetchTrainerStudents = createAsyncThunk(
 );
 
 // PUT /api/trainer/assignments/:id/grade/:submissionId
-// Body:     { grade: 87, feedback: "Good work!", allowResubmit: false }
-// Response: { success: true, submission: { grade, status:"graded", gradedAt } }
 export const gradeSubmission = createAsyncThunk(
   'trainer/gradeSubmission',
   async ({ assignmentId, submissionId, grade, feedback, allowResubmit = false }, { getState, rejectWithValue }) => {
@@ -102,7 +93,6 @@ export const gradeSubmission = createAsyncThunk(
 );
 
 // GET /api/trainer/attendance/session/:sessionId
-// Response: { records: [{ trainee:{ name, email }, status, markedAt }] }
 export const fetchSessionAttendance = createAsyncThunk(
   'trainer/fetchSessionAttendance',
   async (sessionId, { getState, rejectWithValue }) => {
@@ -119,13 +109,12 @@ export const fetchSessionAttendance = createAsyncThunk(
 );
 
 // POST http://localhost:8088/api/attendance/mark
-// Body: { sessionId, traineeId, status: "present"|"absent" }
 export const markAttendance = createAsyncThunk(
   'trainer/markAttendance',
   async ({ sessionId, traineeId, status }, { getState, rejectWithValue }) => {
     try {
       const { data } = await axios.post(
-        'http://localhost:8088/api/attendance/mark',
+        `${API}/api/attendance/mark`,
         { sessionId, traineeId, status },
         authHeader(getState)
       );
@@ -142,7 +131,7 @@ const trainerSlice = createSlice({
   name: 'trainer',
   initialState: {
     dashboard:         null,
-    status:            'idle',   // idle | loading | succeeded | failed
+    status:            'idle',
     error:             null,
 
     sessions:          [],
@@ -160,8 +149,8 @@ const trainerSlice = createSlice({
     gradingStatus:     'idle',
     gradingError:      null,
 
-    attendance:        {},       // { [sessionId]: { records:[] } }
-    attendanceStatus:  {},       // { [sessionId]: 'loading'|'succeeded'|'failed' }
+    attendance:        {},
+    attendanceStatus:  {},
 
     markStatus:        'idle',
     markError:         null,
@@ -188,7 +177,6 @@ const trainerSlice = createSlice({
 
   extraReducers: (builder) => {
 
-    // Normalise any backend array shape: { sessions:[] } | { data:[] } | []
     const norm = (payload, key) =>
       Array.isArray(payload)          ? payload :
       Array.isArray(payload?.[key])   ? payload[key] :
@@ -234,7 +222,7 @@ const trainerSlice = createSlice({
       })
       .addCase(fetchSessionAttendance.rejected,  (s, a) => { s.attendanceStatus[a.meta.arg] = 'failed'; });
 
-    // ── Attendance mark (port 8088) ────────────────────────────────────────────
+    // ── Attendance mark ────────────────────────────────────────────────────────
     builder
       .addCase(markAttendance.pending,   (s)    => { s.markStatus = 'loading';   s.markError = null; })
       .addCase(markAttendance.fulfilled, (s)    => { s.markStatus = 'succeeded'; })
@@ -263,6 +251,8 @@ export const selectAttendance         = (s) => s.trainer.attendance;
 export const selectAttendanceStatus   = (s) => s.trainer.attendanceStatus;
 export const selectActiveTab          = (s) => s.trainer.activeTab;
 export const selectGradingModal       = (s) => s.trainer.gradingModal;
+export const selectMarkStatus         = (s) => s.trainer.markStatus;  // ← ADDED
+export const selectMarkError          = (s) => s.trainer.markError;   // ← ADDED
 
 export default trainerSlice.reducer;
 
