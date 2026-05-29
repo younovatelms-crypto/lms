@@ -6,6 +6,7 @@ const Registration = require('../models/Registration');
 const Batch        = require('../models/Batch');
 const Session      = require('../models/Session');
 const { protect, authorize } = require('../middleware/auth');
+const mongoose = require('mongoose');
 
 const router = express.Router();
 
@@ -97,37 +98,166 @@ router.post('/users', async (req, res) => {
 
 // GET /api/admin/users/:id
 router.get('/users/:id', async (req, res) => {
-  const user = await User.findById(req.params.id).populate('batchId', 'name status');
-  if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-  return res.json({ success: true, data: user.toPublic() });
+  try {
+    // Validate MongoDB ObjectId
+    if (!req.params.id || !req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ success: false, message: `Invalid ID: ${req.params.id}` });
+    }
+    
+    const user = await User.findById(req.params.id).populate('batchId', 'name status');
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    return res.json({ success: true, data: user.toPublic() });
+  } catch (err) {
+    console.error('Get user error:', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
 });
 
 // PUT /api/admin/users/:id
 //   Body: { name?, email?, role?, batchId?, isActive?, phone?, bio? }
+// router.put('/users/:id', async (req, res) => {
+//   try {
+//     // Validate MongoDB ObjectId
+//     if (!req.params.id || !req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+//       return res.status(400).json({ success: false, message: `Invalid ID: ${req.params.id}` });
+//     }
+    
+//     const allowed = ['name', 'email', 'role', 'batchId', 'isActive', 'phone', 'bio', 'skills', 'expertise'];
+//     const updates = {};
+//     allowed.forEach(f => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
+    
+//     const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
+//     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+//     return res.json({ success: true, data: user.toPublic() });
+//   } catch (err) {
+//     console.error('Update user error:', err);
+//     return res.status(500).json({ success: false, message: 'Server error' });
+//   }
+// });
+
+// PUT /api/admin/users/:id
 router.put('/users/:id', async (req, res) => {
-  const allowed = ['name', 'email', 'role', 'batchId', 'isActive', 'phone', 'bio', 'skills', 'expertise'];
-  const updates = {};
-  allowed.forEach(f => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
-  const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
-  if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-  return res.json({ success: true, data: user.toPublic() });
+  try {
+    console.log('PUT API HIT');
+
+    const { id } = req.params;
+
+    console.log('Params:', req.params);
+    console.log('Body:', req.body);
+
+    // Validate MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid user ID: ${id}`
+      });
+    }
+
+    // Convert empty batchId to null
+    if (req.body.batchId === '') {
+      req.body.batchId = null;
+    }
+
+    // Allowed fields
+    const allowedFields = [
+      'name',
+      'email',
+      'role',
+      'batchId',
+      'isActive',
+      'phone',
+      'bio',
+      'skills',
+      'expertise'
+    ];
+
+    // Build updates object
+    const updates = {};
+
+    allowedFields.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        updates[field] = req.body[field];
+      }
+    });
+
+    console.log('Updates:', updates);
+
+    // Update user
+    const updatedUser = await User.findByIdAndUpdate(
+      id,
+      updates,
+      {
+        new: true,
+        runValidators: true
+      }
+    );
+
+    console.log('Updated User:', updatedUser);
+
+    // User not found
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Success response
+    return res.status(200).json({
+      success: true,
+      message: 'User updated successfully',
+      data: updatedUser
+    });
+
+  } catch (err) {
+    console.error('Update User Error:', err);
+
+    return res.status(400).json({
+      success: false,
+      error: err.message,
+      fullError: err
+    });
+  }
 });
+
+module.exports = router;
 
 // PATCH /api/admin/users/:id/status
 //   Body: { isActive: boolean }
 router.patch('/users/:id/status', async (req, res) => {
-  const { isActive } = req.body;
-  if (typeof isActive !== 'boolean') return res.status(400).json({ success: false, message: 'isActive (boolean) required' });
-  const user = await User.findByIdAndUpdate(req.params.id, { isActive }, { new: true });
-  if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-  return res.json({ success: true, data: user.toPublic() });
+  try {
+    // Validate MongoDB ObjectId
+    if (!req.params.id || !req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ success: false, message: `Invalid ID: ${req.params.id}` });
+    }
+    
+    const { isActive } = req.body;
+    if (typeof isActive !== 'boolean') return res.status(400).json({ success: false, message: 'isActive (boolean) required' });
+    
+    const user = await User.findByIdAndUpdate(req.params.id, { isActive }, { new: true });
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    return res.json({ success: true, data: user.toPublic() });
+  } catch (err) {
+    console.error('Update user status error:', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
 });
 
-// DELETE /api/admin/users/:id  (soft-delete via isActive = false)
+// DELETE /api/admin/users/:id  (hard delete - permanently removes user)
 router.delete('/users/:id', async (req, res) => {
-  const user = await User.findByIdAndUpdate(req.params.id, { isActive: false }, { new: true });
-  if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-  return res.json({ success: true, message: `User ${user.name} deactivated` });
+  try {
+    // Validate MongoDB ObjectId
+    if (!req.params.id || !req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ success: false, message: `Invalid ID: ${req.params.id}` });
+    }
+    
+    const user = await User.findByIdAndDelete(req.params.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    return res.json({ success: true, message: `User ${user.name} deleted permanently` });
+  } catch (err) {
+    console.error('Delete user error:', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
 });
 
 // ── BATCHES ───────────────────────────────────────────────────────────────────

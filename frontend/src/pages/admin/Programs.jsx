@@ -1,47 +1,6 @@
 import React, { useMemo, useState } from 'react';
 
-const C = {
-  brand: '#1f3d63',
-  brand2:'#26486f',
-  text1:'#172033',
-  text2:'#657691',
-  line:'#dbe3ed',
-  bg:'#f5f8fc',
-  card:'#ffffff',
-  success:'#16a05f',
-  warning:'#d47a00',
-  danger:'#e12e2a',
-  blue:'#2f6f9b',
-};
-
-const statusColor = {
-  active: C.success,
-  completed: C.blue,
-  upcoming: C.warning,
-  draft: C.text2,
-};
-
-function StatusPill({ status }) {
-  const bg = statusColor[status] || C.text2;
-  return (
-    <span
-      style={{
-        background: bg,
-        color: '#fff',
-        padding: '3px 10px',
-        borderRadius: 999,
-        fontSize: 11,
-        fontWeight: 700,
-        textTransform: 'capitalize',
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {status}
-    </span>
-  );
-}
-
-export default function AdminPrograms() {
+const Programs = () => {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
 
@@ -96,58 +55,97 @@ export default function AdminPrograms() {
     });
   }, [programs, query, status]);
 
-  return (
-    <div style={{ padding: 32, fontFamily: 'Public Sans, system-ui, sans-serif' }}>
-      <div
+  const StatusPill = ({ status }) => {
+    const getStyle = () => {
+      switch (status) {
+        case 'active': return { background: '#DCFCE7', color: '#15803D' };
+        case 'completed': return { background: '#DBEAFE', color: '#1D4ED8' };
+        case 'upcoming': return { background: '#FEF3C7', color: '#B45309' };
+        case 'draft': return { background: '#F1F5F9', color: '#475569' };
+        default: return { background: '#F1F5F9', color: '#475569' };
+      }
+    };
+
+    return (
+      <span
         style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          gap: 16,
-          marginBottom: 18,
-          flexWrap: 'wrap',
+          ...getStyle(),
+          padding: '3px 10px',
+          borderRadius: 999,
+          fontSize: 11,
+          fontWeight: 700,
+          textTransform: 'capitalize',
+          whiteSpace: 'nowrap',
         }}
       >
+        {status}
+      </span>
+    );
+  };
+
+  return (
+    <div style={{ 
+      padding: '32px 36px', 
+      fontFamily: 'Inter, system-ui, sans-serif',
+      background: '#F8FAFC',
+      minHeight: '100vh'
+    }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: 16,
+        marginBottom: 28,
+        flexWrap: 'wrap',
+      }}>
         <div>
-          <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 6, color: C.text1 }}>
+          <h2 style={{ 
+            fontSize: 28, 
+            fontWeight: 800, 
+            marginBottom: 6, 
+            color: '#0F172A',
+            letterSpacing: '-0.5px'
+          }}>
             Programs ({filtered.length})
           </h2>
-          <p style={{ margin: 0, color: C.text2, fontSize: 13 }}>
+          <p style={{ 
+            margin: 0, 
+            color: '#64748B', 
+            fontSize: 14,
+            fontWeight: 500
+          }}>
             Manage curriculum programs and track their lifecycle.
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <button
-            type="button"
-            onClick={() => alert('Add Program UI not implemented yet (mock page).')}
-            style={{
-              background: C.brand,
-              color: '#fff',
-              border: 'none',
-              borderRadius: 10,
-              padding: '10px 14px',
-              fontSize: 13,
-              fontWeight: 800,
-              cursor: 'pointer',
-              boxShadow: '0 8px 20px rgba(31,61,99,0.18)',
-            }}
-          >
-            + Add Program
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => alert('Add Program UI not implemented yet (mock page).')}
+          style={{
+            background: '#1E3A5F',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 10,
+            padding: '10px 18px',
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: 'pointer',
+            boxShadow: '0 4px 16px rgba(30,58,95,0.18)',
+            transition: 'transform 0.15s, box-shadow 0.15s'
+          }}
+        >
+          + Add Program
+        </button>
       </div>
 
-      <div
-        style={{
-          background: C.card,
-          border: `1px solid ${C.line}`,
-          borderRadius: 12,
-          padding: 16,
-          marginBottom: 16,
-          boxShadow: '0 1px 2px rgba(23,32,51,.08), 0 12px 28px rgba(31,61,99,.05)',
-        }}
-      >
+      <div style={{
+        background: '#ffffff',
+        border: '1px solid #E2E8F0',
+        borderRadius: 16,
+        padding: 20,
+        marginBottom: 16,
+        boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 8px 24px rgba(30,58,95,0.08)',
+      }}>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
           <div style={{ flex: '1 1 260px', minWidth: 240 }}>
             <input
@@ -158,61 +156,62 @@ export default function AdminPrograms() {
                 width: '100%',
                 padding: '10px 12px',
                 borderRadius: 10,
-                border: `1px solid ${C.line}`,
+                border: '1px solid #E2E8F0',
                 outline: 'none',
                 fontSize: 13,
                 fontFamily: 'inherit',
+                background: '#F8FAFC',
+                transition: 'border-color 0.15s, box-shadow 0.15s'
               }}
             />
           </div>
 
-          <div>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              style={{
-                padding: '10px 12px',
-                borderRadius: 10,
-                border: `1px solid ${C.line}`,
-                outline: 'none',
-                fontSize: 13,
-                fontFamily: 'inherit',
-                background: '#fff',
-                color: C.text1,
-              }}
-            >
-              <option value="all">All statuses</option>
-              <option value="active">Active</option>
-              <option value="upcoming">Upcoming</option>
-              <option value="completed">Completed</option>
-              <option value="draft">Draft</option>
-            </select>
-          </div>
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            style={{
+              padding: '10px 12px',
+              borderRadius: 10,
+              border: '1px solid #E2E8F0',
+              outline: 'none',
+              fontSize: 13,
+              fontFamily: 'inherit',
+              background: '#fff',
+              color: '#0F172A',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="all">All statuses</option>
+            <option value="active">Active</option>
+            <option value="upcoming">Upcoming</option>
+            <option value="completed">Completed</option>
+            <option value="draft">Draft</option>
+          </select>
         </div>
       </div>
 
-      <div
-        style={{
-          background: C.card,
-          borderRadius: 12,
-          overflow: 'hidden',
-          border: `1px solid ${C.line}`,
-          boxShadow: '0 1px 2px rgba(23,32,51,.08), 0 12px 28px rgba(31,61,99,.05)',
-        }}
-      >
+      <div style={{
+        background: '#ffffff',
+        borderRadius: 16,
+        overflow: 'hidden',
+        border: '1px solid #E2E8F0',
+        boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 8px 24px rgba(30,58,95,0.08)',
+      }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ background: '#f8fafc', color: C.text2 }}>
+            <tr style={{ background: '#F8FAFC' }}>
               {['Program', 'Code', 'Status', 'Start', 'End'].map((h) => (
                 <th
                   key={h}
                   style={{
                     padding: '12px 16px',
                     textAlign: 'left',
-                    fontSize: 12,
+                    fontSize: 11,
                     letterSpacing: '.7px',
                     textTransform: 'uppercase',
-                    borderBottom: `1px solid ${C.line}`,
+                    color: '#64748B',
+                    fontWeight: 700,
+                    borderBottom: '1px solid #E2E8F0',
                   }}
                 >
                   {h}
@@ -226,23 +225,40 @@ export default function AdminPrograms() {
               <tr
                 key={p._id}
                 style={{
-                  background: i % 2 ? '#f8fafc' : '#fff',
-                  borderBottom: `1px solid ${C.line}`,
+                  borderBottom: '1px solid #E2E8F0',
+                  transition: 'background 0.15s'
                 }}
               >
-                <td style={{ padding: '11px 16px', fontSize: 13, color: C.text1, fontWeight: 700 }}>
+                <td style={{ 
+                  padding: '12px 16px', 
+                  fontSize: 13, 
+                  color: '#0F172A', 
+                  fontWeight: 600 
+                }}>
                   {p.name}
                 </td>
-                <td style={{ padding: '11px 16px', fontSize: 13, color: C.text2 }}>
+                <td style={{ 
+                  padding: '12px 16px', 
+                  fontSize: 13, 
+                  color: '#64748B' 
+                }}>
                   {p.programCode}
                 </td>
-                <td style={{ padding: '11px 16px' }}>
+                <td style={{ padding: '12px 16px' }}>
                   <StatusPill status={p.status} />
                 </td>
-                <td style={{ padding: '11px 16px', fontSize: 13, color: C.text2 }}>
+                <td style={{ 
+                  padding: '12px 16px', 
+                  fontSize: 13, 
+                  color: '#64748B' 
+                }}>
                   {p.startDate ? new Date(p.startDate).toLocaleDateString() : '—'}
                 </td>
-                <td style={{ padding: '11px 16px', fontSize: 13, color: C.text2 }}>
+                <td style={{ 
+                  padding: '12px 16px', 
+                  fontSize: 13, 
+                  color: '#64748B' 
+                }}>
                   {p.endDate ? new Date(p.endDate).toLocaleDateString() : '—'}
                 </td>
               </tr>
@@ -250,7 +266,12 @@ export default function AdminPrograms() {
 
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={5} style={{ padding: 32, textAlign: 'center', color: C.text2, fontSize: 13 }}>
+                <td colSpan={5} style={{ 
+                  padding: 48, 
+                  textAlign: 'center', 
+                  color: '#64748B', 
+                  fontSize: 13 
+                }}>
                   No programs found.
                 </td>
               </tr>
@@ -259,10 +280,16 @@ export default function AdminPrograms() {
         </table>
       </div>
 
-      <div style={{ marginTop: 14, color: C.text2, fontSize: 12 }}>
+      <div style={{ 
+        marginTop: 16, 
+        color: '#64748B', 
+        fontSize: 12,
+        fontWeight: 500
+      }}>
         Note: This page uses mock data until a backend <b>Programs</b> API is added.
       </div>
     </div>
   );
-}
+};
 
+export default Programs;
