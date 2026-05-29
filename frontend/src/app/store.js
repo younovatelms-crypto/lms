@@ -7,9 +7,10 @@ import authReducer        from '../features/auth/authSlice';
 import adminReducer       from '../features/admin/adminSlice';
 import hrReducer          from '../features/hr/hrSlice';
 import traineeReducer     from '../features/trainee/traineeSlice';
-import trainerReducer     from '../features/Trainer/traineeSlice';
+import trainerReducer     from '../features/Trainer/trainerSlice';
 import sessionsReducer    from '../features/session/sessionsSlice';
 import assignmentsReducer from '../features/assignment/assignmentsSlice';
+import batchReducer from '../features/session/batchSlice';
 
 // Persist only auth so the user stays logged in on page refresh
 const authPersistConfig = {
@@ -26,6 +27,7 @@ const rootReducer = combineReducers({
   trainer:     trainerReducer,
   sessions:    sessionsReducer,
   assignments: assignmentsReducer,
+  batches: batchReducer,
 });
 
 export const store = configureStore({

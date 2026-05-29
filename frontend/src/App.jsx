@@ -119,6 +119,7 @@ function App() {
         <Route element={<ProtectedRoute allowedRoles={['trainer']} />}>
           <Route path="/trainer" element={<TrainerLayout />}>
             <Route path="dashboard"   element={<TrainerDashboard />} />
+              <Route path="batches"       element={<AdminBatches />} />
             <Route path="sessions"    element={<TrainerSessions />} />
             <Route path="attendance"  element={<TrainerAttendance />} />
             <Route path="assignments" element={<TrainerAssignments />} />
