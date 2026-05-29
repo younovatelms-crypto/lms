@@ -1,107 +1,3 @@
-import React, { useEffect } from 'react';
-import { useAppDispatch, useAppSelector } from '../../app/hooks';
-import { fetchBatches, selectAllBatches } from '../../features/admin/adminSlice';
-
-export default function AdminBatches() {
-  const dispatch = useAppDispatch();
-  const batches = useAppSelector(selectAllBatches);
-  
-  useEffect(() => { 
-    dispatch(fetchBatches()); 
-  }, [dispatch]);
-
-  const getStatusStyle = (status) => {
-    switch (status) {
-      case 'active': return { background: '#DCFCE7', color: '#15803D' };
-      case 'completed': return { background: '#DBEAFE', color: '#1D4ED8' };
-      case 'upcoming': return { background: '#FEF3C7', color: '#B45309' };
-      default: return { background: '#F1F5F9', color: '#475569' };
-    }
-  };
-
-  return (
-    <div style={{ 
-      padding: '32px 36px', 
-      fontFamily: 'Inter, system-ui, sans-serif',
-      background: '#F8FAFC',
-      minHeight: '100vh'
-    }}>
-      <div style={{ marginBottom: 28 }}>
-        <h2 style={{ 
-          fontSize: 28, 
-          fontWeight: 800, 
-          marginBottom: 6, 
-          color: '#0F172A',
-          letterSpacing: '-0.5px'
-        }}>
-          Batches ({batches.length})
-        </h2>
-        <p style={{ 
-          margin: 0, 
-          color: '#64748B', 
-          fontSize: 14,
-          fontWeight: 500
-        }}>
-          Manage training batches and monitor their progress.
-        </p>
-      </div>
-
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', 
-        gap: 16 
-      }}>
-        {batches.map(b => (
-          <div key={b._id} style={{ 
-            background: '#ffffff', 
-            borderRadius: 16, 
-            padding: 20, 
-            boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 8px 24px rgba(30,58,95,0.08)', 
-            border: '1px solid #E2E8F0',
-            transition: 'transform 0.15s, box-shadow 0.15s'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-              <h3 style={{ margin: 0, fontSize: 16, color: '#0F172A', fontWeight: 700 }}>{b.name}</h3>
-              <span style={{
-                ...getStatusStyle(b.status),
-                fontSize: 11,
-                padding: '3px 10px',
-                borderRadius: 999,
-                fontWeight: 700,
-                textTransform: 'capitalize'
-              }}>
-                {b.status}
-              </span>
-            </div>
-            <p style={{ margin: '0 0 8px', fontSize: 13, color: '#64748B', fontWeight: 500 }}>
-              Course: {b.course || '—'}
-            </p>
-            <p style={{ margin: '0 0 8px', fontSize: 13, color: '#64748B', fontWeight: 500 }}>
-              Trainer: {b.trainerId?.name || 'Unassigned'}
-            </p>
-            <p style={{ margin: 0, fontSize: 13, color: '#64748B', fontWeight: 500 }}>
-              Start: {b.startDate ? new Date(b.startDate).toLocaleDateString() : '—'}
-            </p>
-          </div>
-        ))}
-        
-        {batches.length === 0 && (
-          <div style={{
-            gridColumn: '1 / -1',
-            background: '#ffffff',
-            border: '1px solid #E2E8F0',
-            borderRadius: 16,
-            padding: 48,
-            textAlign: 'center',
-            boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 8px 24px rgba(30,58,95,0.08)',
-          }}>
-            <p style={{ color: '#64748B', fontSize: 14, margin: 0 }}>No batches found</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 // src/pages/admin/Batches.jsx  (also works at src/pages/trainer/Batches.jsx)
 // Role-aware: Admin gets full CRUD + Add Batch form. Trainer gets read-only view.
 // All data via Redux: batchSlice (state.batches) + adminSlice trainers list
@@ -261,7 +157,7 @@ const Spinner = ({ size = 22 }) => (
 const CARD_ACCENTS = ['#6366f1','#0ea5e9','#10b981','#f59e0b','#ec4899','#8b5cf6'];
 
 const BatchCard = ({ batch, idx, isAdmin, onEdit, onDelete }) => {
-  const accent = CARD_ACCENTS[idx % CARD_ACCENTS.length];
+  const accent   = CARD_ACCENTS[idx % CARD_ACCENTS.length];
   const initials = (batch.name || 'B').slice(0,2).toUpperCase();
   const trainer  = batch.trainerId?.name || '—';
   const start    = batch.startDate
@@ -275,14 +171,16 @@ const BatchCard = ({ batch, idx, isAdmin, onEdit, onDelete }) => {
       animation:'fadeUp .3s ease',
     }}>
       {/* Top accent bar */}
-      <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:accent, borderRadius:'14px 14px 0 0' }} />
+      <div style={{ position:'absolute', top:0, left:0, right:0, height:3,
+        background:accent, borderRadius:'14px 14px 0 0' }} />
 
       <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:12 }}>
         {/* Avatar + name */}
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
           <div style={{ width:42, height:42, borderRadius:10, background:`${accent}18`,
             display:'flex', alignItems:'center', justifyContent:'center',
-            fontFamily:'DM Mono, monospace', fontWeight:500, fontSize:'0.85rem', color:accent, flexShrink:0 }}>
+            fontFamily:'DM Mono, monospace', fontWeight:500, fontSize:'0.85rem',
+            color:accent, flexShrink:0 }}>
             {initials}
           </div>
           <div>
@@ -311,10 +209,10 @@ const BatchCard = ({ batch, idx, isAdmin, onEdit, onDelete }) => {
       {/* Meta grid */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px 16px', marginTop:14 }}>
         {[
-          { icon:'🎓', label:'Course',    value: batch.course      || '—'  },
-          { icon:'👤', label:'Trainer',   value: trainer                    },
-          { icon:'📅', label:'Starts',    value: start                      },
-          { icon:'👥', label:'Capacity',  value: batch.maxStudents ? `${batch.maxStudents} students` : '—' },
+          { icon:'🎓', label:'Course',   value: batch.course      || '—' },
+          { icon:'👤', label:'Trainer',  value: trainer                   },
+          { icon:'📅', label:'Starts',   value: start                     },
+          { icon:'👥', label:'Capacity', value: batch.maxStudents ? `${batch.maxStudents} students` : '—' },
         ].map(({ icon, label, value }) => (
           <div key={label}>
             <div style={{ fontSize:'0.67rem', fontWeight:600, color:'#94a3b8',
@@ -376,8 +274,8 @@ const BatchForm = ({ editBatch, trainers, onClose }) => {
     const payload = {
       ...form,
       maxStudents: Number(form.maxStudents),
-      startDate:   form.startDate || undefined,
-      trainerId:   form.trainerId || undefined,
+      startDate:   form.startDate  || undefined,
+      trainerId:   form.trainerId  || undefined,
     };
 
     let result;
@@ -507,7 +405,8 @@ const DeleteConfirm = ({ batch, onConfirm, onCancel, deleting }) => (
     <div style={{ display:'flex', gap:10 }}>
       <button onClick={onCancel} className="submit-btn"
         style={{ flex:1, padding:'10px', borderRadius:8, border:'1.5px solid #e2e8f0',
-          background:'#fff', color:'#374151', fontWeight:600, fontSize:'0.85rem', cursor:'pointer', fontFamily:'inherit' }}>
+          background:'#fff', color:'#374151', fontWeight:600, fontSize:'0.85rem',
+          cursor:'pointer', fontFamily:'inherit' }}>
         Cancel
       </button>
       <button onClick={onConfirm} disabled={deleting} className="submit-btn"
@@ -542,9 +441,9 @@ const Batches = () => {
   const trainersStatus = useSelector(selectAdminTrainersStatus);
 
   // ── Local UI state ───────────────────────────────────────────────────────────
-  const [tab,         setTab]         = useState('all');       // all | active | upcoming | completed
+  const [tab,         setTab]         = useState('all');
   const [search,      setSearch]      = useState('');
-  const [sidePanel,   setSidePanel]   = useState(null);        // null | 'add' | 'edit' | 'delete'
+  const [sidePanel,   setSidePanel]   = useState(null);   // null | 'add' | 'edit' | 'delete'
   const [targetBatch, setTargetBatch] = useState(null);
 
   // ── Fetch on mount ───────────────────────────────────────────────────────────
@@ -556,7 +455,8 @@ const Batches = () => {
   // ── Derived list ─────────────────────────────────────────────────────────────
   const filtered = batches.filter(b => {
     const matchTab    = tab === 'all' || b.status === tab;
-    const matchSearch = !search || b.name?.toLowerCase().includes(search.toLowerCase()) ||
+    const matchSearch = !search ||
+      b.name?.toLowerCase().includes(search.toLowerCase()) ||
       b.course?.toLowerCase().includes(search.toLowerCase()) ||
       b.trainerId?.name?.toLowerCase().includes(search.toLowerCase());
     return matchTab && matchSearch;
@@ -571,10 +471,10 @@ const Batches = () => {
   };
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
-  const openAdd    = () => { if (!isAdmin) return; setTargetBatch(null); setSidePanel('add'); };
+  const openAdd    = ()  => { if (!isAdmin) return; setTargetBatch(null); setSidePanel('add'); };
   const openEdit   = (b) => { if (!isAdmin) return; setTargetBatch(b);    setSidePanel('edit'); };
   const openDelete = (b) => { if (!isAdmin) return; setTargetBatch(b);    setSidePanel('delete'); };
-  const closePanel = () => { setSidePanel(null); setTargetBatch(null); dispatch(clearBatchErrors()); };
+  const closePanel = ()  => { setSidePanel(null); setTargetBatch(null); dispatch(clearBatchErrors()); };
 
   const handleDelete = async () => {
     if (!targetBatch) return;
@@ -587,19 +487,24 @@ const Batches = () => {
     }
   };
 
-  const TABS = isAdmin ? ['all', 'active', 'upcoming', 'completed', 'cancelled'] : ['all', 'active', 'upcoming', 'completed'];
+  const TABS = isAdmin
+    ? ['all', 'active', 'upcoming', 'completed', 'cancelled']
+    : ['all', 'active', 'upcoming', 'completed'];
 
   return (
-    <div style={{ minHeight:'100vh', background:'#f8fafc', fontFamily:"'DM Sans', system-ui, sans-serif", color:'#0f172a' }}>
+    <div style={{ minHeight:'100vh', background:'#f8fafc',
+      fontFamily:"'DM Sans', system-ui, sans-serif", color:'#0f172a' }}>
       <style>{CSS}</style>
 
       <div style={{ maxWidth:1320, margin:'0 auto', padding:'28px 24px' }}>
 
         {/* ── PAGE HEADER ── */}
-        <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', flexWrap:'wrap', gap:16, marginBottom:28 }}>
+        <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between',
+          flexWrap:'wrap', gap:16, marginBottom:28 }}>
           <div>
             <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:5 }}>
-              <h1 style={{ fontSize:'1.55rem', fontWeight:800, color:'#0f172a', letterSpacing:'-0.4px', margin:0 }}>
+              <h1 style={{ fontSize:'1.55rem', fontWeight:800, color:'#0f172a',
+                letterSpacing:'-0.4px', margin:0 }}>
                 {isAdmin ? 'Batches' : 'My Batches'}
               </h1>
               {!isAdmin && (
@@ -609,9 +514,10 @@ const Batches = () => {
                 </span>
               )}
             </div>
-            <p style={{ fontSize:'0.84rem', color:'#64748b' }}>
-              {isAdmin ? 'Manage all training batches — create, assign trainers, and track progress.'
-                       : 'Your assigned training batches.'}
+            <p style={{ fontSize:'0.84rem', color:'#64748b', margin:0 }}>
+              {isAdmin
+                ? 'Manage all training batches — create, assign trainers, and track progress.'
+                : 'Your assigned training batches.'}
             </p>
           </div>
 
@@ -630,12 +536,19 @@ const Batches = () => {
             <button
               onClick={openAdd}
               style={{ display:'flex', alignItems:'center', gap:7, padding:'10px 20px',
-                borderRadius:9, border:'none', background:'linear-gradient(135deg,#6366f1,#4f46e5)',
+                borderRadius:9, border:'none',
+                background:'linear-gradient(135deg,#6366f1,#4f46e5)',
                 color:'#fff', fontWeight:700, fontSize:'0.85rem', cursor:'pointer',
                 boxShadow:'0 2px 8px rgba(99,102,241,.35)', fontFamily:'inherit',
                 transition:'box-shadow .15s, transform .15s' }}
-              onMouseEnter={e => { e.currentTarget.style.boxShadow='0 4px 16px rgba(99,102,241,.5)'; e.currentTarget.style.transform='translateY(-1px)'; }}
-              onMouseLeave={e => { e.currentTarget.style.boxShadow='0 2px 8px rgba(99,102,241,.35)'; e.currentTarget.style.transform=''; }}
+              onMouseEnter={e => {
+                e.currentTarget.style.boxShadow = '0 4px 16px rgba(99,102,241,.5)';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(99,102,241,.35)';
+                e.currentTarget.style.transform = '';
+              }}
             >
               <span style={{ fontSize:'1rem' }}>+</span> Add Batch
             </button>
@@ -645,10 +558,10 @@ const Batches = () => {
         {/* ── STATS STRIP ── */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:24 }}>
           {[
-            { label: isAdmin ? 'Total' : 'My Batches', value: stats.total, color:'#6366f1', bg:'#eef2ff' },
-            { label:'Active',   value: stats.active,    color:'#15803d', bg:'#f0fdf4' },
-            { label:'Upcoming', value: stats.upcoming,  color:'#1d4ed8', bg:'#eff6ff' },
-            { label:'Done',     value: stats.completed, color:'#374151', bg:'#f9fafb' },
+            { label: isAdmin ? 'Total' : 'My Batches', value: stats.total,     color:'#6366f1', bg:'#eef2ff' },
+            { label:'Active',                           value: stats.active,    color:'#15803d', bg:'#f0fdf4' },
+            { label:'Upcoming',                         value: stats.upcoming,  color:'#1d4ed8', bg:'#eff6ff' },
+            { label:'Done',                             value: stats.completed, color:'#374151', bg:'#f9fafb' },
           ].map(({ label, value, color, bg }) => (
             <div key={label} style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:12,
               padding:'14px 16px', display:'flex', alignItems:'center', gap:12 }}>
@@ -657,7 +570,8 @@ const Batches = () => {
                 fontSize:'1.2rem', fontWeight:800, color, fontFamily:'DM Mono, monospace' }}>
                 {value}
               </div>
-              <div style={{ fontSize:'0.78rem', fontWeight:600, color:'#64748b', textTransform:'uppercase', letterSpacing:'0.5px' }}>
+              <div style={{ fontSize:'0.78rem', fontWeight:600, color:'#64748b',
+                textTransform:'uppercase', letterSpacing:'0.5px' }}>
                 {label}
               </div>
             </div>
@@ -672,20 +586,20 @@ const Batches = () => {
 
             {/* Search + Tabs */}
             <div style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap', marginBottom:18 }}>
-              {/* Search */}
               <div style={{ position:'relative', flex:1, minWidth:200 }}>
-                <span style={{ position:'absolute', left:11, top:'50%', transform:'translateY(-50%)', fontSize:'0.85rem', color:'#94a3b8' }}>🔍</span>
+                <span style={{ position:'absolute', left:11, top:'50%', transform:'translateY(-50%)',
+                  fontSize:'0.85rem', color:'#94a3b8' }}>🔍</span>
                 <input
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   placeholder="Search by name, course, trainer…"
                   className="form-input"
-                  style={{ width:'100%', border:'1.5px solid #e2e8f0', borderRadius:9, padding:'9px 12px 9px 34px',
-                    fontSize:'0.84rem', color:'#0f172a', background:'#fff', fontFamily:'inherit' }}
+                  style={{ width:'100%', border:'1.5px solid #e2e8f0', borderRadius:9,
+                    padding:'9px 12px 9px 34px', fontSize:'0.84rem', color:'#0f172a',
+                    background:'#fff', fontFamily:'inherit' }}
                 />
               </div>
 
-              {/* Tabs */}
               <div style={{ display:'flex', background:'#f1f5f9', borderRadius:9, padding:3, gap:2 }}>
                 {TABS.map(t => (
                   <button key={t} className={`tab-btn ${tab === t ? 'active' : ''}`}
@@ -693,7 +607,7 @@ const Batches = () => {
                     style={{ padding:'6px 14px', borderRadius:7, border:'none', cursor:'pointer',
                       fontSize:'0.78rem', fontWeight:600,
                       color: tab === t ? '#0f172a' : '#64748b',
-                      background: 'transparent', fontFamily:'inherit', textTransform:'capitalize' }}>
+                      background:'transparent', fontFamily:'inherit', textTransform:'capitalize' }}>
                     {t}
                   </button>
                 ))}
@@ -764,8 +678,8 @@ const Batches = () => {
               )}
             </div>
           )}
-        </div>
 
+        </div>
       </div>
     </div>
   );
