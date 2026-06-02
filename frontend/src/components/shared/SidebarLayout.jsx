@@ -302,7 +302,7 @@ const ProfileDropdown = ({ user, brandColor, onLogout, loggingOut, onClose }) =>
 export default function SidebarLayout({
   navItems,
   brandColor,
-title = 'Youva OS',
+title = 'YouVA OS',
   pageTitle,
 }) {
   const dispatch  = useAppDispatch();
@@ -400,7 +400,12 @@ title = 'Youva OS',
           {/* Brand row */}
           <div className="yn-brand">
             <div className="yn-brand-logo">Y</div>
-            {!collapsed && <span className="yn-brand-text">{title}</span>}
+            {!collapsed && (
+              <div className="yn-brand-text-container">
+                <div className="yn-brand-main">YouVA OS</div>
+                <div className="yn-brand-sub">{user?.role ? `${user.role.charAt(0).toUpperCase() + user.role.slice(1)} Dashboard` : 'Dashboard'}</div>
+              </div>
+            )}
             {/* Desktop: collapse toggle */}
             <button
               className="yn-collapse-btn yn-desktop-only"
@@ -589,21 +594,42 @@ function buildCSS(brandColor) {
 /* Brand */
 .yn-brand {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
-  padding: 26px 20px 22px;
+  padding: 20px 20px 18px;
   border-bottom: 1px solid var(--yn-border);
   flex-shrink: 0;
 }
 .yn-brand-logo {
   display: none;
 }
-.yn-brand-text {
+.yn-brand-text-container {
+  flex: 1; 
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.yn-brand-main {
   color: var(--yn-text-1);
-  font-weight: 800; font-size: 22px;
+  font-weight: 800; 
+  font-size: 20px;
   letter-spacing: 0;
-  text-transform: uppercase;
-  flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  line-height: 1;
+  white-space: nowrap; 
+  overflow: hidden; 
+  text-overflow: ellipsis;
+}
+.yn-brand-sub {
+  color: var(--yn-text-3);
+  font-weight: 500;
+  font-size: 12px;
+  letter-spacing: 0.3px;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: capitalize;
 }
 .yn-collapse-btn {
   background: none; border: none; cursor: pointer;
@@ -924,6 +950,16 @@ function buildCSS(brandColor) {
     transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
   }
   .yn-sidebar.yn-mobile-open { transform: translateX(0); }
+
+  .yn-brand {
+    padding: 16px 20px 14px;
+  }
+  .yn-brand-main {
+    font-size: 18px;
+  }
+  .yn-brand-sub {
+    font-size: 11px;
+  }
 
   .yn-hamburger { display: flex; }
   .yn-desktop-only { display: none; }

@@ -348,9 +348,19 @@ router.post('/registrations/:id/convert', async (req, res) => {
 
 // DELETE /api/admin/registrations/:id
 router.delete('/registrations/:id', async (req, res) => {
-  const reg = await Registration.findByIdAndDelete(req.params.id);
-  if (!reg) return res.status(404).json({ success: false, message: 'Registration not found' });
-  return res.json({ success: true, message: 'Registration deleted' });
+  try {
+    // Validate MongoDB ObjectId
+    if (!req.params.id || !req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ success: false, message: `Invalid ID: ${req.params.id}` });
+    }
+    
+    const reg = await Registration.findByIdAndDelete(req.params.id);
+    if (!reg) return res.status(404).json({ success: false, message: 'Registration not found' });
+    return res.json({ success: true, message: 'Registration deleted' });
+  } catch (err) {
+    console.error('Delete registration error:', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
 });
 
 // ── ANALYTICS ─────────────────────────────────────────────────────────────────

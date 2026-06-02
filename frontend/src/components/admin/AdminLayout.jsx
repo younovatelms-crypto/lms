@@ -47,7 +47,7 @@ const NAV = [
         ],
       },
 
-      { to: '/admin/registrations', icon: 'clipboard-list', label: 'Registrations', badge: 4 },
+      { to: '/admin/registrations', icon: 'clipboard-list', label: 'Registrations' },
     ],
   },
   {

@@ -52,6 +52,7 @@ export default function LoginPage() {
     if (!form.email)               e.email    = 'Email is required';
     else if (!emailRe.test(form.email)) e.email = 'Enter a valid email address';
     if (!form.password)            e.password = 'Password is required';
+    if (!remember)                 e.remember = 'Please check "Remember Me" to continue';
     return e;
   };
 
@@ -82,7 +83,7 @@ export default function LoginPage() {
 
           <div className="yn-brand">
             <h1 className="yn-title">Welcome back</h1>
-Sign in to your Youva OS account
+            <div className="yn-subtitle">Sign in to your YouVA OS account</div>
           </div>
 
           <form onSubmit={handleSubmit} noValidate>
@@ -121,16 +122,28 @@ Sign in to your Youva OS account
               {errors.password && <p className="yn-err"><i className="ti ti-alert-circle" />{errors.password}</p>}
             </div>
 
-            <div className="yn-row">
-              <label className="yn-remember">
-                <input type="checkbox" checked={remember}
-                  onChange={e => setRemember(e.target.checked)} />
-                Remember me
-              </label>
-              <button type="button" className="yn-forgot"
-                onClick={() => navigate('/forgot_password')}>
-                Forgot password?
-              </button>
+            <div className={`yn-field${errors.remember ? ' yn-field-error' : ''}`}>
+              <div className="yn-row">
+                <label className="yn-remember">
+                  <input type="checkbox" checked={remember}
+                    onChange={e => {
+                      setRemember(e.target.checked);
+                      if (e.target.checked && errors.remember) {
+                        setErrors(prev => ({ ...prev, remember: '' }));
+                      }
+                    }} 
+                    required />
+                  Remember Me *
+                </label>
+                <button type="button" className="yn-forgot"
+                  onClick={() => navigate('/forgot_password')}>
+                  Forgot password?
+                </button>
+              </div>  
+              {errors.remember && <p className="yn-err"><i className="ti ti-alert-circle" />{errors.remember}</p>}
+              {/* <div className="yn-remember-help">
+                {remember ? '✓ Required to proceed with login' : 'You must check this to login'}
+              </div> */}
             </div>
 
             <button type="submit" className="yn-btn-primary" disabled={isLoading}>
@@ -212,9 +225,17 @@ const CSS = `
   .yn-eye { position: absolute; right: 13px; background: none; border: none; color: #7a8ba4; cursor: pointer; padding: 4px; font-size: 16px; line-height: 1; display: flex; align-items: center; }
   .yn-eye:hover { color: #1f3d63; }
 
-  .yn-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .yn-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
   .yn-remember { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #050a16; cursor: pointer; user-select: none; }
   .yn-remember input { accent-color: #e12e2a; width: 15px; height: 15px; cursor: pointer; }
+  .yn-remember-help {
+    font-size: 12px; color: #7a8ba4; margin-bottom: 12px;
+    text-align: left; font-weight: 500;
+    min-height: 16px; transition: color 0.2s;
+  }
+  .yn-field-error .yn-remember-help {
+    color: #e12e2a;
+  }
   .yn-forgot { font-size: 14px; color: #2f6f9b; background: none; border: none; cursor: pointer; font-family: inherit; padding: 0; font-weight: 500; }
   .yn-forgot:hover { color: #1f3d63; }
 
