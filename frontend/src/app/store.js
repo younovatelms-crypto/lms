@@ -11,6 +11,7 @@ import trainerReducer     from '../features/Trainer/trainerSlice';
 import sessionsReducer    from '../features/session/sessionsSlice';
 import assignmentsReducer from '../features/assignment/assignmentsSlice';
 import batchReducer from '../features/session/batchSlice';
+import courseReducer      from '../features/admin/courseSlice';   // ← REQUIRED for Courses page
 
 // Persist only auth so the user stays logged in on page refresh
 const authPersistConfig = {
@@ -28,6 +29,7 @@ const rootReducer = combineReducers({
   sessions:    sessionsReducer,
   assignments: assignmentsReducer,
   batches: batchReducer,
+    courses:     courseReducer,     // ← key 'courses' must match selector: s.courses.*
 });
 
 export const store = configureStore({

@@ -3,11 +3,13 @@
   "version": "3.0.0",
   "description": "Younovate LMS — Complete REST API with LiveKit, Socket.io, S3, SMTP",
   "main": "src/server.js",
-  "scripts": {
-    "dev":   "nodemon src/server.js",
-    "start": "node src/server.js",
-    "seed":  "node src/utils/seed.js"
-  },
+ "scripts": {
+  "dev": "nodemon src/server.js",
+  "start": "node src/server.js",
+  "seed": "node src/utils/seed.js",
+  "yiep": "node src/data/yiepCurriculum.js",
+  "setup": "npm run seed && npm run yiep && npm run start"
+},
   "dependencies": {
     "bcryptjs":             "^3.0.3",
     "cookie-parser":        "^1.4.7",

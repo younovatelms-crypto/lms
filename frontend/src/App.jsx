@@ -32,6 +32,8 @@ import AdminUsers        from './pages/admin/Users';
 import AdminSettings     from './pages/admin/Settings';
 import AdminReports      from './pages/admin/Reports';
 import AdminSupport      from './pages/admin/Support';
+import Courses from './pages/admin/Courses';
+import Profile from './pages/admin/Profilepage';
 
 
 
@@ -105,9 +107,11 @@ function App() {
             <Route path="registrations" element={<AdminRegistrations />} />
             <Route path="programs"      element={<AdminPrograms />} />
             <Route path="users"         element={<AdminUsers />} />
+            <Route path="courses"         element={<Courses />} />
             <Route path="settings"     element={<AdminSettings />} />
             <Route path="reports"      element={<AdminReports />} />
             <Route path="support"      element={<AdminSupport />} />
+            <Route path="profile" element={<Profile />} />
             <Route index element={<Navigate to="dashboard" replace />} />
 
 
@@ -123,6 +127,7 @@ function App() {
             <Route path="sessions"    element={<TrainerSessions />} />
             <Route path="attendance"  element={<TrainerAttendance />} />
             <Route path="assignments" element={<TrainerAssignments />} />
+            <Route path="profile" element={<Profile />} />
             <Route index element={<Navigate to="dashboard" replace />} />
           </Route>
         </Route>
@@ -133,6 +138,7 @@ function App() {
             <Route path="dashboard"   element={<TraineeDashboard />} />
             <Route path="sessions"    element={<TraineeSessions />} />
             <Route path="assignments" element={<TraineeAssignments />} />
+             <Route path="profile" element={<Profile />} />
             <Route index element={<Navigate to="dashboard" replace />} />
           </Route>
         </Route>
@@ -144,6 +150,7 @@ function App() {
             <Route path="trainees"   element={<HRTrainees />} />
             <Route path="interviews" element={<HRInterviews />} />
             <Route path="pipeline"   element={<HRPipeline />} />
+             <Route path="profile" element={<Profile />} />
             <Route index element={<Navigate to="dashboard" replace />} />
           </Route>
         </Route>

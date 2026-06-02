@@ -152,14 +152,33 @@ router.get('/assignments', async (req, res) => {
 // ─── GET /api/trainer/students ────────────────────────────────────────────────
 router.get('/students', async (req, res) => {
   try {
-    const batches   = await Batch.find({ trainerId: req.user._id }).select('_id');
-    const batchIds  = batches.map(b => b._id);
-    const students  = await User.find({ role: 'trainee', isActive: true, batchId: { $in: batchIds } })
-      .populate('batchId', 'name')
-      .sort('name');
-    return res.json({ success: true, students: students.map(s => s.toPublic()) });
+    const batches = await Batch.find({
+      trainerId: req.user._id
+    }).select('_id');
+
+    const batchIds = batches.map(b => b._id);
+
+    console.log("Trainer:", req.user._id);
+    console.log("Batch IDs:", batchIds);
+
+    const students = await User.find({
+      role: 'trainee',
+      isActive: true,
+      batchId: { $in: batchIds }
+    }).populate('batchId', 'name');
+
+    console.log("Students:", students);
+
+    return res.json({
+      success: true,
+      students: students.map(s => s.toPublic())
+    });
   } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
+    console.error(err);
+    return res.status(500).json({
+      success: false,
+      message: err.message
+    });
   }
 });
 
