@@ -222,19 +222,93 @@ export const fetchRegistrations = createAsyncThunk(
   }
 );
 
-// ─── Convert lead → trainee ───────────────────────────────────────────────────
-// Exported as BOTH convertLead AND convertRegistration
-// so whichever name your pages use, it works.
-export const convertLead = createAsyncThunk(
-  'admin/convertLead',
-  async (registrationId, { getState, rejectWithValue }) => {
+// ─── Create registration/lead ─────────────────────────────────────────────────
+export const createRegistration = createAsyncThunk(
+  'admin/createRegistration',
+  async (registrationData, { getState, rejectWithValue }) => {
     try {
       const { data } = await axios.post(
-        `${API}/api/admin/registrations/${registrationId}/convert`,
-        {},
+        `${API}/api/admin/registrations`,
+        registrationData,
         authHeader(getState)
       );
-      return { registrationId, data: data.data || data };
+      return data.data || data;
+    } catch (err) {
+      return rejectWithValue(
+        err.response?.data?.message || 'Failed to create registration.'
+      );
+    }
+  }
+);
+
+// ─── Get single registration ──────────────────────────────────────────────────
+export const getRegistration = createAsyncThunk(
+  'admin/getRegistration',
+  async (id, { getState, rejectWithValue }) => {
+    try {
+      const { data } = await axios.get(
+        `${API}/api/admin/registrations/${id}`,
+        authHeader(getState)
+      );
+      return data.data || data;
+    } catch (err) {
+      return rejectWithValue(
+        err.response?.data?.message || 'Failed to fetch registration.'
+      );
+    }
+  }
+);
+
+// ─── Update registration ──────────────────────────────────────────────────────
+export const updateRegistration = createAsyncThunk(
+  'admin/updateRegistration',
+  async ({ id, ...updateData }, { getState, rejectWithValue }) => {
+    try {
+      const { data } = await axios.patch(
+        `${API}/api/admin/registrations/${id}`,
+        updateData,
+        authHeader(getState)
+      );
+      return data.data || data;
+    } catch (err) {
+      return rejectWithValue(
+        err.response?.data?.message || 'Failed to update registration.'
+      );
+    }
+  }
+);
+
+// ─── Delete registration ──────────────────────────────────────────────────────
+export const deleteRegistration = createAsyncThunk(
+  'admin/deleteRegistration',
+  async (id, { getState, rejectWithValue }) => {
+    try {
+      console.log('deleteRegistration called with ID:', id, typeof id);
+      const { data } = await axios.delete(
+        `${API}/api/admin/registrations/${id}`,
+        authHeader(getState)
+      );
+      return { id, message: data.message };
+    } catch (err) {
+      console.error('deleteRegistration error:', err.response?.data || err.message);
+      return rejectWithValue(
+        err.response?.data?.message || 'Failed to delete registration.'
+      );
+    }
+  }
+);
+
+// ─── Convert lead → trainee ───────────────────────────────────────────────────
+export const convertLead = createAsyncThunk(
+  'admin/convertLead',
+  async ({ id, batchId, role = 'trainee' }, { getState, rejectWithValue }) => {
+    try {
+      const { data } = await axios.post(
+        `${API}/api/admin/registrations/${id}/convert`,
+        { batchId, role },
+        authHeader(getState)
+      );
+      return { registrationId: id, data: data.data || data };
     } catch (err) {
       return rejectWithValue(
         err.response?.data?.message || 'Failed to convert lead.'
@@ -477,6 +551,33 @@ const adminSlice = createSlice({
         if (state.dashboard?.totalTrainees != null) {
           state.dashboard.totalTrainees += 1;
         }
+      })
+
+      // ── createRegistration ─────────────────────────────────────────────────
+      .addCase(createRegistration.fulfilled, (state, action) => {
+        state.registrations.unshift(action.payload);
+      })
+
+      // ── getRegistration ────────────────────────────────────────────────────
+      .addCase(getRegistration.fulfilled, (state, action) => {
+        // Update the registration in the list if it exists
+        const index = state.registrations.findIndex(r => r._id === action.payload._id);
+        if (index !== -1) {
+          state.registrations[index] = action.payload;
+        }
+      })
+
+      // ── updateRegistration ─────────────────────────────────────────────────
+      .addCase(updateRegistration.fulfilled, (state, action) => {
+        const index = state.registrations.findIndex(r => r._id === action.payload._id);
+        if (index !== -1) {
+          state.registrations[index] = action.payload;
+        }
+      })
+
+      // ── deleteRegistration ─────────────────────────────────────────────────
+      .addCase(deleteRegistration.fulfilled, (state, action) => {
+        state.registrations = state.registrations.filter(r => r._id !== action.payload.id);
       });
   },
 });

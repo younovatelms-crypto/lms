@@ -26,7 +26,7 @@ const UserManagement = () => {
   const [editingUser, setEditingUser] = useState(null);
   const [toast, setToast] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(12);
+  const [itemsPerPage] = useState(10);
 
   useEffect(() => {
     dispatch(fetchUsers());
@@ -141,7 +141,7 @@ const UserManagement = () => {
 
   return (
     <div style={{ 
-      padding: window.innerWidth <= 768 ? '12px 16px 16px 16px' : '16px 24px 24px 24px', 
+      padding: window.innerWidth <= 768 ? '8px 12px 12px 12px' : '12px 16px 16px 16px', 
       fontFamily: 'Inter, system-ui, sans-serif',
       background: '#F8FAFC',
       height: '100vh',
@@ -150,17 +150,17 @@ const UserManagement = () => {
       overflow: 'hidden'
     }}>
       {/* Header */}
-      <div style={{ marginBottom: window.innerWidth <= 768 ? 16 : 20, flexShrink: 0 }}>
+      <div style={{ marginBottom: window.innerWidth <= 768 ? 12 : 16, flexShrink: 0 }}>
         <h1 style={{ 
-          fontSize: window.innerWidth <= 768 ? 20 : 24, 
+          fontSize: window.innerWidth <= 768 ? 18 : 22, 
           fontWeight: 700, 
           color: '#1E293B', 
-          margin: '0 0 4px'
+          margin: '0 0 3px'
         }}>
           User & Role Management
         </h1>
         <p style={{ 
-          fontSize: window.innerWidth <= 768 ? 12 : 14, 
+          fontSize: window.innerWidth <= 768 ? 11 : 13, 
           color: '#64748B', 
           margin: 0 
         }}>
@@ -173,7 +173,7 @@ const UserManagement = () => {
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'space-between',
-        marginBottom: 16,
+        marginBottom: 12,
         gap: 16,
         flexWrap: 'wrap',
         flexShrink: 0,
@@ -270,7 +270,8 @@ const UserManagement = () => {
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
         display: 'flex',
         flexDirection: 'column',
-        marginBottom: '16px'
+        marginBottom: '16px',
+        minHeight: '500px'
       }}>
         <table style={{ 
           width: '100%', 
@@ -352,10 +353,11 @@ const UserManagement = () => {
                 e.currentTarget.style.backgroundColor = index % 2 === 0 ? '#fff' : '#FAFBFC';
               }}>
                 <td style={{ 
-                  padding: window.innerWidth <= 768 ? '8px 12px' : '12px 16px', 
-                  fontSize: window.innerWidth <= 768 ? 13 : 14, 
+                  padding: window.innerWidth <= 768 ? '6px 10px' : '10px 14px', 
+                  fontSize: window.innerWidth <= 768 ? 12 : 13, 
                   fontWeight: 500, 
-                  color: '#1E293B'
+                  color: '#1E293B',
+                  height: '45px'
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div style={{
@@ -378,12 +380,14 @@ const UserManagement = () => {
                 <td style={{ 
                   padding: '12px 16px', 
                   fontSize: 14, 
-                  color: '#64748B'
+                  color: '#64748B',
+                  height: '50px'
                 }}>
                   {user.email || '—'}
                 </td>
                 <td style={{ 
-                  padding: '12px 16px'
+                  padding: '12px 16px',
+                  height: '50px'
                 }}>
                   <span style={{
                     padding: '4px 12px',
@@ -400,7 +404,8 @@ const UserManagement = () => {
                 <td style={{ 
                   padding: '12px 16px', 
                   fontSize: 14, 
-                  color: '#64748B'
+                  color: '#64748B',
+                  height: '50px'
                 }}>
                   <span style={{
                     padding: '4px 8px',
@@ -417,7 +422,8 @@ const UserManagement = () => {
                 <td style={{ 
                   padding: '12px 16px', 
                   fontSize: 14, 
-                  color: '#64748B'
+                  color: '#64748B',
+                  height: '50px'
                 }}>
                   {user.batchId?.name ? (
                     <span style={{
@@ -436,7 +442,8 @@ const UserManagement = () => {
                   )}
                 </td>
                 <td style={{ 
-                  padding: '12px 16px'
+                  padding: '12px 16px',
+                  height: '50px'
                 }}>
                   <span style={{
                     padding: '4px 12px',
@@ -450,7 +457,7 @@ const UserManagement = () => {
                     {user.isActive ? 'Active' : 'Inactive'}
                   </span>
                 </td>
-                <td style={{ padding: window.innerWidth <= 768 ? '8px 12px' : '12px 16px', textAlign: 'center' }}>
+                <td style={{ padding: window.innerWidth <= 768 ? '6px 10px' : '10px 14px', textAlign: 'center', height: '45px' }}>
                   <div style={{ display: 'flex', gap: window.innerWidth <= 768 ? 4 : 8, justifyContent: 'center', flexWrap: window.innerWidth <= 768 ? 'wrap' : 'nowrap' }}>
                     <button
                       onClick={() => {
@@ -536,6 +543,15 @@ const UserManagement = () => {
                     </button>
                   </div>
                 </td>
+              </tr>
+            ))}
+            {/* Fill remaining space with empty rows only when there's data */}
+            {currentUsers.length > 0 && Array.from({ length: Math.max(0, 10 - currentUsers.length) }, (_, i) => (
+              <tr key={`empty-${i}`} style={{ 
+                background: (currentUsers.length + i) % 2 === 0 ? '#fff' : '#FAFBFC',
+                height: '45px'
+              }}>
+                <td colSpan={7} style={{ padding: '10px 14px', height: '45px', border: 'none' }}></td>
               </tr>
             ))}
           </tbody>
