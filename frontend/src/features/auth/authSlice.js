@@ -1,12 +1,43 @@
 // src/features/auth/authSlice.js
-// Complete corrected authSlice — thunks declared BEFORE the slice
-// so extraReducers can reference them without hoisting issues.
+// Corrected authSlice — thunks declared BEFORE the slice so extraReducers
+// can reference them without hoisting issues.
+//
+// CHANGES vs. original:
+//   [FIX 1] login thunk persisted `data.token` (undefined). The API returns
+//           `accessToken`, so "Remember me" was storing the string "undefined".
+//           Now persists `data.accessToken` via a single helper.
+//   [FIX 2] Added readToken()/persistToken()/clearToken() helpers so a stale
+//           "undefined"/"null" string in localStorage can never read as a
+//           valid token on boot.
+//   [FIX 3] Persisting/clearing the token is now centralized in the helpers and
+//           used consistently across login, setCredentials, logout, etc.
+//   [FIX 4] logoutUser.pending now sets a loading status for UI feedback.
+//   [ADD]   updateProfile thunk (PUT /api/auth/profile) + reducer cases; writes
+//           the returned user back into state.user (merged) on success.
 
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import axios from 'axios';
 
 // ─── Base API URL ─────────────────────────────────────────────────────────────
 const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+
+// ─── Token storage helpers ────────────────────────────────────────────────────
+// localStorage only stores strings, so a bad write (e.g. setItem('token', undefined))
+// persists the literal "undefined". These helpers guard against that.
+const TOKEN_KEY = 'token';
+
+const readToken = () => {
+  const t = localStorage.getItem(TOKEN_KEY);
+  if (!t || t === 'undefined' || t === 'null') return null;
+  return t;
+};
+
+const persistToken = (token) => {
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+  else localStorage.removeItem(TOKEN_KEY);
+};
+
+const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 
 // ─── Axios auth header helper ─────────────────────────────────────────────────
 const authHeader = (token) => ({
@@ -47,9 +78,12 @@ export const login = createAsyncThunk(
         password,
       });
       // data = { success, accessToken, user, role }
-      if (remember) {
-        localStorage.setItem('token', data.token);
-      }
+
+      // [FIX 1] persist the correct field (accessToken, not token).
+      // Only persist when "remember" is set; otherwise the token lives in
+      // Redux memory for the session and is gone on refresh (by design).
+      if (remember) persistToken(data.accessToken);
+
       return data;
     } catch (err) {
       return rejectWithValue(
@@ -107,7 +141,6 @@ export const forgotPassword = createAsyncThunk(
         `${API}/api/auth/forgot-password`,
         { email }
       );
-      // data = { success: true, message: 'If that email is registered...' }
       return data;
     } catch (err) {
       return rejectWithValue(
@@ -126,7 +159,6 @@ export const verifyOtp = createAsyncThunk(
         `${API}/api/auth/verify-otp`,
         { email, otp }
       );
-      // data = { success: true, message: 'OTP verified', verified: true }
       return data;
     } catch (err) {
       return rejectWithValue(
@@ -145,7 +177,6 @@ export const resetPassword = createAsyncThunk(
         `${API}/api/auth/reset-password`,
         { email, otp, newPassword }
       );
-      // data = { success: true, message: 'Password reset successfully...' }
       return data;
     } catch (err) {
       return rejectWithValue(
@@ -155,13 +186,38 @@ export const resetPassword = createAsyncThunk(
   }
 );
 
+// ─── Update Profile ───────────────────────────────────────────────────────────
+// PUT /api/auth/profile — only the whitelisted fields are sent. The server
+// returns { success, user } (already run through toPublic), and we replace
+// state.user with it so the UI reflects the change immediately.
+export const updateProfile = createAsyncThunk(
+  'auth/updateProfile',
+  async (updates, { getState, rejectWithValue }) => {
+    try {
+      const token = getState().auth.token;
+      const { data } = await axios.put(
+        `${API}/api/auth/profile`,
+        updates, // { name?, phone?, bio?, profilePicture?, linkedIn?, github?, skills?, expertise? }
+        authHeader(token)
+      );
+      return data.user;
+    } catch (err) {
+      return rejectWithValue(
+        err.response?.data?.message || 'Failed to update profile. Please try again.'
+      );
+    }
+  }
+);
+
 // =============================================================================
 // INITIAL STATE
 // =============================================================================
+const bootToken = readToken(); // [FIX 2] sanitized read — never "undefined"/"null"
+
 const initialState = {
   user:            null,
-  token:           localStorage.getItem('token') || null,
-  isAuthenticated: !!localStorage.getItem('token'),
+  token:           bootToken,
+  isAuthenticated: !!bootToken,
   status:          'idle',  // 'idle' | 'loading'
   error:           null,
 };
@@ -185,7 +241,7 @@ const authSlice = createSlice({
       state.user            = null;
       state.token           = null;
       state.isAuthenticated = false;
-      localStorage.removeItem('token');
+      clearToken();
     },
 
     // Called on Google OAuth callback — token arrives via URL query param
@@ -194,7 +250,7 @@ const authSlice = createSlice({
       state.user            = user;
       state.token           = token;
       state.isAuthenticated = true;
-      localStorage.setItem('token', token);
+      persistToken(token);
     },
   },
 
@@ -246,22 +302,27 @@ const authSlice = createSlice({
         state.user            = null;
         state.token           = null;
         state.isAuthenticated = false;
-        localStorage.removeItem('token');
+        clearToken();
       })
 
       // ── logoutUser (async — calls backend to rotate sessionToken) ──────────
+      .addCase(logoutUser.pending, (state) => {
+        state.status = 'loading';      // [FIX 4]
+      })
       .addCase(logoutUser.fulfilled, (state) => {
+        state.status          = 'idle';
         state.user            = null;
         state.token           = null;
         state.isAuthenticated = false;
-        localStorage.removeItem('token');
+        clearToken();
       })
       .addCase(logoutUser.rejected, (state) => {
         // Clear client state even when server call fails
+        state.status          = 'idle';
         state.user            = null;
         state.token           = null;
         state.isAuthenticated = false;
-        localStorage.removeItem('token');
+        clearToken();
       })
 
       // ── forgotPassword ─────────────────────────────────────────────────────
@@ -271,7 +332,6 @@ const authSlice = createSlice({
       })
       .addCase(forgotPassword.fulfilled, (state) => {
         state.status = 'idle';
-        // No auth state change — ForgotPasswordPage handles step transition
       })
       .addCase(forgotPassword.rejected, (state, action) => {
         state.status = 'idle';
@@ -301,6 +361,21 @@ const authSlice = createSlice({
         // User must sign in fresh after reset — no auto-login
       })
       .addCase(resetPassword.rejected, (state, action) => {
+        state.status = 'idle';
+        state.error  = action.payload;
+      })
+
+      // ── updateProfile ──────────────────────────────────────────────────────
+      .addCase(updateProfile.pending, (state) => {
+        state.status = 'loading';
+        state.error  = null;
+      })
+      .addCase(updateProfile.fulfilled, (state, action) => {
+        state.status = 'idle';
+        // Merge so any fields the server didn't return stay intact
+        state.user   = { ...state.user, ...action.payload };
+      })
+      .addCase(updateProfile.rejected, (state, action) => {
         state.status = 'idle';
         state.error  = action.payload;
       });

@@ -29,7 +29,7 @@ const attendanceRoutes  = require('./routes/attendanceRoutes');
 const assignmentRoutes  = require('./routes/assignmentRoutes');
 const batchRoutes       = require('./routes/batchRoutes');
 const userRoutes        = require('./routes/userRoutes');
-
+const courseRoutes        = require('./routes/courseRoutes');
 const app    = express();
 const server = http.createServer(app);
 
@@ -98,6 +98,7 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/assignments',assignmentRoutes);
 app.use('/api/batches',    batchRoutes);
 app.use('/api/users',      userRoutes);
+app.use('/api/courses',    courseRoutes);
 
 // ── 404 catch-all ────────────────────────────────────────────────────────────
 app.use((req, res) =>
