@@ -372,5 +372,113 @@ router.get('/analytics/placement', async (req, res) => {
   ]);
   return res.json({ success: true, data: pipeline });
 });
+router.post('/trainers/:id/assign-batch', async (req, res) => {
+  try {
+    const trainer = await User.findById(req.params.id);
 
+    if (!trainer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trainer not found'
+      });
+    }
+
+    if (trainer.role !== 'trainer') {
+      return res.status(400).json({
+        success: false,
+        message: 'User is not a trainer'
+      });
+    }
+
+    const { batchId } = req.body;
+
+    const batch = await Batch.findById(batchId);
+
+    if (!batch) {
+      return res.status(404).json({
+        success: false,
+        message: 'Batch not found'
+      });
+    }
+
+    batch.trainerId = trainer._id;
+    await batch.save();
+
+    trainer.batchId = batch._id;
+    await trainer.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Trainer assigned successfully',
+      data: {
+        trainerId: trainer._id,
+        batchId: batch._id
+      }
+    });
+
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+router.post('/trainees/assign-batch', async (req, res) => {
+  try {
+    const { batchId, traineeIds } = req.body;
+
+    if (!batchId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Batch ID is required'
+      });
+    }
+
+    if (!Array.isArray(traineeIds) || traineeIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please select at least one trainee'
+      });
+    }
+
+    const batch = await Batch.findById(batchId);
+
+    if (!batch) {
+      return res.status(404).json({
+        success: false,
+        message: 'Batch not found'
+      });
+    }
+
+    const result = await User.updateMany(
+      {
+        _id: { $in: traineeIds },
+        role: 'trainee'
+      },
+      {
+        $set: {
+          batchId: batch._id
+        }
+      }
+    );
+
+    return res.json({
+      success: true,
+      message: `${result.modifiedCount} trainees assigned successfully`,
+      data: {
+        batchId: batch._id,
+        batchName: batch.name,
+        assignedCount: result.modifiedCount
+      }
+    });
+
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message
+    });
+  }
+});
 module.exports = router;

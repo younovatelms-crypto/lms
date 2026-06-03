@@ -526,7 +526,9 @@ title = 'YouVA OS',
           </header>
 
           {/* Page content */}
-          <main className="yn-content" id="main-content">
+          {/* Reduce gap between topbar and page heading for trainee/trainer routes by tightening
+              the first child container padding (pages currently use h1/h2 with margins). */}
+          <main className="yn-content yn-content-tight" id="main-content">
             <Outlet />
           </main>
         </div>
@@ -791,6 +793,7 @@ function buildCSS(brandColor) {
 /* Top bar */
 .yn-topbar {
   height: 72px;
+  /* NOTE: Topbar->heading gap is reduced for trainee/trainer pages via content padding below. */
   background: #fff;
   border-bottom: 1px solid var(--yn-line);
   display: flex; align-items: center; justify-content: space-between;
@@ -936,6 +939,10 @@ function buildCSS(brandColor) {
 
 /* Page content */
 .yn-content { flex: 1; overflow-y: auto; overflow-x: hidden; background: var(--yn-page-bg); }
+
+/* Tight mode: used for trainee/trainer pages to reduce visible gap under topbar */
+.yn-content-tight > *:first-child { padding-top: 6px !important; margin-top: 0 !important; }
+
 
 /* ── Visibility helpers ───────────────────────────────────────────────────── */
 .yn-desktop-only { display: flex; }
