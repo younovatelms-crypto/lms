@@ -320,6 +320,62 @@ export const convertLead = createAsyncThunk(
 // ── Alias so Registrations.jsx import works without changing that file ─────────
 export const convertRegistration = convertLead;
 
+// ─── Assign trainer to batch ──────────────────────────────────────────────────
+export const assignTrainerToBatch = createAsyncThunk(
+  'admin/assignTrainerToBatch',
+  async ({ trainerId, batchId }, { getState, rejectWithValue }) => {
+    try {
+      const { data } = await axios.post(
+        `${API}/api/admin/trainers/${trainerId}/assign-batch`,
+        { batchId },
+        authHeader(getState)
+      );
+      return { trainerId, batchId, data: data.data || data };
+    } catch (err) {
+      return rejectWithValue(
+        err.response?.data?.message || 'Failed to assign trainer to batch.'
+      );
+    }
+  }
+);
+
+// ─── Get trainer batch assignments ────────────────────────────────────────────
+export const fetchTrainerBatchAssignments = createAsyncThunk(
+  'admin/fetchTrainerBatchAssignments',
+  async (trainerId, { getState, rejectWithValue }) => {
+    try {
+      const { data } = await axios.get(
+        `${API}/api/trainers/${trainerId}/batches`,
+        authHeader(getState)
+      );
+      return { trainerId, batchIds: data.batchIds || [] };
+    } catch (err) {
+      return rejectWithValue(
+        err.response?.data?.message || 'Failed to fetch trainer batch assignments.'
+      );
+    }
+  }
+);
+
+// ─── Assign trainees to batch ─────────────────────────────────────────────────
+export const assignTraineesToBatch = createAsyncThunk(
+  'admin/assignTraineesToBatch',
+  async ({ batchId, traineeIds }, { getState, rejectWithValue }) => {
+    try {
+      const { data } = await axios.post(
+        `${API}/api/admin/trainees/assign-batch`,
+        { batchId, traineeIds },
+        authHeader(getState)
+      );
+      return { batchId, traineeIds, data: data.data || data };
+    } catch (err) {
+      return rejectWithValue(
+        err.response?.data?.message || 'Failed to assign trainees to batch.'
+      );
+    }
+  }
+);
+
 // =============================================================================
 // INITIAL STATE
 // =============================================================================
@@ -578,6 +634,33 @@ const adminSlice = createSlice({
       // ── deleteRegistration ─────────────────────────────────────────────────
       .addCase(deleteRegistration.fulfilled, (state, action) => {
         state.registrations = state.registrations.filter(r => r._id !== action.payload.id);
+      })
+
+      // ── assignTrainerToBatch ──────────────────────────────────────────────
+      .addCase(assignTrainerToBatch.fulfilled, (state, action) => {
+        const { trainerId, batchId } = action.payload;
+        // Update trainer in trainers list
+        const trainerIndex = state.trainers.findIndex(t => String(t._id) === String(trainerId));
+        if (trainerIndex !== -1) {
+          state.trainers[trainerIndex].batchId = batchId;
+        }
+        // Update batch in batches list
+        const batchIndex = state.batches.findIndex(b => String(b._id) === String(batchId));
+        if (batchIndex !== -1) {
+          state.batches[batchIndex].trainerId = trainerId;
+        }
+      })
+
+      // ── assignTraineesToBatch ──────────────────────────────────────────────
+      .addCase(assignTraineesToBatch.fulfilled, (state, action) => {
+        const { batchId, traineeIds } = action.payload;
+        // Update trainees in trainees list
+        traineeIds.forEach(traineeId => {
+          const traineeIndex = state.trainees.findIndex(t => String(t._id) === String(traineeId));
+          if (traineeIndex !== -1) {
+            state.trainees[traineeIndex].batchId = batchId;
+          }
+        });
       });
   },
 });
