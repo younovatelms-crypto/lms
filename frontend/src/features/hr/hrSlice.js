@@ -49,7 +49,10 @@ const hrSlice = createSlice({
       .addCase(fetchHrDashboard.rejected,  (state, action) => { state.status = 'failed'; state.error = action.payload; })
 
       .addCase(fetchHrTrainees.pending,   (state)         => { state.status = 'loading'; state.error = null; })
-      .addCase(fetchHrTrainees.fulfilled, (state, action) => { state.status = 'succeeded'; state.trainees = action.payload; })
+      .addCase(fetchHrTrainees.fulfilled, (state, action) => { 
+        state.status = 'succeeded'; 
+        state.trainees = action.payload.trainees || action.payload; 
+      })
       .addCase(fetchHrTrainees.rejected,  (state, action) => { state.status = 'failed'; state.error = action.payload; });
   },
 });

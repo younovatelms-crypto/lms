@@ -1,0 +1,284 @@
+.evaluations-list {
+  padding: 20px;
+  background: #f5f5f5;
+  min-height: 100vh;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+}
+
+.page-header h2 {
+  color: #333;
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0 0 5px 0;
+}
+
+.subtitle {
+  color: #666;
+  font-size: 14px;
+  margin: 0;
+}
+
+.filters {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 25px;
+  background: white;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.search-input {
+  flex: 1;
+  padding: 10px 15px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.filter-select {
+  padding: 10px 15px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  min-width: 200px;
+}
+
+.candidates-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 20px;
+}
+
+.candidate-card-eval {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  transition: all 0.2s ease;
+}
+
+.candidate-card-eval:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  transform: translateY(-2px);
+}
+
+.candidate-info {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.candidate-avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 24px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.candidate-details {
+  flex: 1;
+}
+
+.candidate-details h3 {
+  color: #333;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 5px 0;
+}
+
+.email {
+  color: #666;
+  font-size: 13px;
+  margin: 0 0 10px 0;
+}
+
+.meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.batch {
+  background: #e3f2fd;
+  color: #1976d2;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.score {
+  background: #e8f5e9;
+  color: #4caf50;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.candidate-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 15px;
+  border-top: 1px solid #eee;
+}
+
+.evaluated-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #4caf50;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.badge-icon {
+  background: #4caf50;
+  color: white;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.pending-badge {
+  color: #ff9800;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.evaluate-btn {
+  padding: 8px 20px;
+  background: #1e3a5f;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.evaluate-btn:hover {
+  background: #2c4f7c;
+}
+
+.loading, .no-data {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 60px;
+  color: #666;
+  font-size: 16px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+@media (max-width: 768px) {
+  .evaluations-list {
+    padding: 15px;
+  }
+  
+  .page-header h2 {
+    font-size: 20px;
+  }
+  
+  .subtitle {
+    font-size: 12px;
+  }
+  
+  .candidates-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .filters {
+    flex-direction: column;
+    padding: 12px;
+  }
+  
+  .filter-select {
+    min-width: unset;
+  }
+  
+  .candidate-card-eval {
+    padding: 15px;
+  }
+  
+  .candidate-avatar {
+    width: 50px;
+    height: 50px;
+    font-size: 20px;
+  }
+  
+  .candidate-details h3 {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .evaluations-list {
+    padding: 10px;
+  }
+  
+  .page-header {
+    margin-bottom: 15px;
+  }
+  
+  .page-header h2 {
+    font-size: 18px;
+  }
+  
+  .filters {
+    padding: 10px;
+    gap: 10px;
+  }
+  
+  .search-input,
+  .filter-select {
+    font-size: 13px;
+    padding: 8px 12px;
+  }
+  
+  .candidate-card-eval {
+    padding: 12px;
+  }
+  
+  .candidate-info {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  
+  .candidate-avatar {
+    width: 60px;
+    height: 60px;
+  }
+  
+  .candidate-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .evaluate-btn {
+    width: 100%;
+  }
+}

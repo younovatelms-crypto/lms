@@ -51,9 +51,10 @@ import TraineeSessions   from './pages/trainee/Sessions';
 import TraineeAssignments from './pages/trainee/Assignments';
 
 import HRDashboard   from './pages/hr/Dashboard';
-import HRTrainees    from './pages/hr/Trainees';
 import HRInterviews  from './pages/hr/Interviews';
 import HRPipeline    from './pages/hr/Pipeline';
+import HREvaluation  from './pages/hr/Evaluation';
+import HREvaluationsList from './pages/hr/EvaluationsList';
 
 // ── Protected Route ───────────────────────────────────────────────────────
 function ProtectedRoute({ allowedRoles }) {
@@ -147,9 +148,10 @@ function App() {
         <Route element={<ProtectedRoute allowedRoles={['hr']} />}>
           <Route path="/hr" element={<HRLayout />}>
             <Route path="dashboard"  element={<HRDashboard />} />
-            <Route path="trainees"   element={<HRTrainees />} />
             <Route path="interviews" element={<HRInterviews />} />
             <Route path="pipeline"   element={<HRPipeline />} />
+            <Route path="evaluations" element={<HREvaluationsList />} />
+            <Route path="evaluation/:id" element={<HREvaluation />} />
              <Route path="profile" element={<Profile />} />
             <Route index element={<Navigate to="dashboard" replace />} />
           </Route>
