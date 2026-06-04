@@ -6,14 +6,18 @@ const crypto   = require('crypto');
 
 // ── Sub-schema: HR Evaluation ─────────────────────────────────────────────────
 const hrEvaluationSchema = new mongoose.Schema({
-  communication:   { type: Number, min: 0, max: 100 },
-  technical:       { type: Number, min: 0, max: 100 },
-  confidence:      { type: Number, min: 0, max: 100 },
-  overallScore:    { type: Number, min: 0, max: 100 },
-  recommendation:  { type: String, default: '' },
-  evaluationNotes: { type: String, default: '' },
-  evaluatedBy:     { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  evaluatedAt:     { type: Date },
+  communication:         { type: Number, min: 0, max: 100 },
+  technical:             { type: Number, min: 0, max: 100 },
+  problemSolving:        { type: Number, min: 0, max: 100 },
+  attitude:              { type: Number, min: 0, max: 100 },
+  learningAgility:       { type: Number, min: 0, max: 100 },
+  operationalReadiness:  { type: Number, min: 0, max: 100 },
+  confidence:            { type: Number, min: 0, max: 100 },
+  overallScore:          { type: Number, min: 0, max: 100 },
+  recommendation:        { type: String, default: '' },
+  evaluationNotes:       { type: String, default: '' },
+  evaluatedBy:           { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  evaluatedAt:           { type: Date },
 }, { _id: false });
 
 const userSchema = new mongoose.Schema({
@@ -37,7 +41,7 @@ const userSchema = new mongoose.Schema({
   skills:             [{ type: String }],
   placementStatus:    {
     type:    String,
-    enum:    ['enrolled', 'training', 'ready', 'interview_scheduled', 'placed', 'not_placed'],
+    enum:    ['enrolled', 'training', 'ready', 'interview_scheduled', 'interview_done', 'offer_extended', 'placed', 'not_placed'],
     default: 'enrolled',
   },
   placementNote:      { type: String, default: '' },
