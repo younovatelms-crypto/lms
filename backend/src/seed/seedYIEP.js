@@ -3,15 +3,18 @@
 //
 // Standalone seeder — loads the full YIEP curriculum into MongoDB.
 //
-//   node src/seed/seedYIEP.js          # create if missing
-//   node src/seed/seedYIEP.js --force  # rebuild curriculum if it already exists
+//   npm run seed          # create if missing
+//   npm run seed:force    # rebuild curriculum if it already exists
 //
 require('dotenv').config();
 const mongoose = require('mongoose');
-const Course = require('../models/courses');
+const Course = require('../models/courses');               // <-- match filename casing
 const { YIEP_COURSE, YIEP_TRIMESTERS } = require('../data/yiepCurriculum');
 
-const MONGO_URI = process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/younovate_lms';
+const MONGO_URI =
+  process.env.MONGO_URI ||
+  process.env.MONGODB_URI ||
+  'mongodb://127.0.0.1:27017/younovate_lms';
 const FORCE = process.argv.includes('--force');
 
 (async () => {
@@ -22,8 +25,8 @@ const FORCE = process.argv.includes('--force');
     let course = await Course.findOne({ code: YIEP_COURSE.code });
 
     if (course && !FORCE) {
-      console.log(`! YIEP course already exists (id ${course._id}). Run with --force to rebuild.`);
-      process.exit(0);
+      console.log(`! YIEP course already exists (id ${course._id}). Run "npm run seed:force" to rebuild.`);
+      return;                                              // falls through to finally -> disconnect
     }
 
     if (course) {
@@ -39,11 +42,10 @@ const FORCE = process.argv.includes('--force');
     console.log(`  id=${course._id}`);
     console.log(`  trimesters=${s.trimesters}  months=${s.months}  subjects=${s.subjects}`);
     console.log(`  hours: total=${s.hours.total}  S1=${s.hours.s1Theory}  S2=${s.hours.s2Practical}  S3=${s.hours.s3Assignment}  S4=${s.hours.s4Feedback}`);
-
-    await mongoose.disconnect();
-    process.exit(0);
   } catch (err) {
     console.error('✗ Seed failed:', err.message);
-    process.exit(1);
+    process.exitCode = 1;
+  } finally {
+    await mongoose.disconnect();
   }
 })();

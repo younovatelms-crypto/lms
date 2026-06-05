@@ -8,7 +8,13 @@
   "start": "node src/server.js",
   "seed": "node src/utils/seed.js",
   "yiep": "node src/data/yiepCurriculum.js",
-  "setup": "npm run seed && npm run yiep && npm run start"
+  "setup": "npm run seed && npm run yiep && npm run start",
+  "seed:force": "node src/seed/seedYIEP.js --force",
+  "seedsubjects": "node src/scripts/backfillSubjectContent.js --code=YIEP --dry",
+  "seedin": "node src/scripts/seedYiep.js --force",
+   "yblp": "node src/data/yblpCurriculum.js",
+   "yblpseed": "node src/seed/seedYblp.js --force",
+    "yblprun": "node src/scripts/seedYblp.js"
 },
   "dependencies": {
     "bcryptjs":             "^3.0.3",

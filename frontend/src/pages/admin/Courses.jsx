@@ -1,18 +1,29 @@
 // src/pages/admin/Courses.jsx
 // Admin-only CRUD page for Courses.
-// Structure mirrors Batches.jsx exactly:
-//   Stats strip → Search + Tabs → Card grid → Slide-in side panel (Add/Edit/Delete)
+// Structure:
+//   Stats strip → Search + Tabs → Card grid → CENTERED MODAL (Add/Edit/Delete)
 // All data via Redux: courseSlice (state.courses)
 //
-// CHANGE: course duration now carries a UNIT (hour | day | week | month |
-//         trimester | year) instead of being hard-coded to weeks. The unit
-//         lives in form state, so it flows through the existing payload →
-//         createCourse / updateCourse thunks → backend with no slice change.
-//         Backend must whitelist `durationUnit` on POST/PUT /api/courses.
-
+// CHANGE LOG
+//   • Add / Edit / Delete now open in a CENTERED MODAL (dark backdrop) instead
+//     of a right-hand slide-in side panel.
+//   • Click-outside and Esc both close the modal.
+//   • Body scroll is locked while a modal is open.
+//   • Fully mobile responsive (modal goes near full-width + scrolls; stats and
+//     duration grid collapse on small screens).
+//   • Course cards span the full width grid now that no side panel steals space.
+//   • Duration carries a UNIT (hour | day | week | month | trimester | year).
+//     The unit lives in form state and flows through the existing payload →
+//     createCourse / updateCourse thunks. Backend must whitelist `durationUnit`.
+//   • NEW: each card now has a 👁️ VIEW button (next to Edit/Delete) AND the whole
+//     card is clickable. Both navigate to the course detail route:
+//         /admin/courses/:id   →   <Route path="courses/:id" element={<CourseDetail/>} />
+//     Edit / Delete / View buttons call e.stopPropagation() so they don't also
+//     trigger the card's navigation.
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 import {
   fetchCourses,
@@ -84,15 +95,18 @@ const fmtDuration = (value, unit = 'week') => {
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
   *, *::before, *::after { box-sizing: border-box; }
-  @keyframes slideIn { from{opacity:0;transform:translateX(32px)} to{opacity:1;transform:translateX(0)} }
-  @keyframes fadeUp  { from{opacity:0;transform:translateY(8px)}  to{opacity:1;transform:translateY(0)} }
-  @keyframes spin    { to{transform:rotate(360deg)} }
-  @keyframes shimmer { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
+  @keyframes fadeUp    { from{opacity:0;transform:translateY(8px)}  to{opacity:1;transform:translateY(0)} }
+  @keyframes spin      { to{transform:rotate(360deg)} }
+  @keyframes shimmer   { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
+  @keyframes overlayIn { from{opacity:0} to{opacity:1} }
+  @keyframes modalIn   { from{opacity:0;transform:translateY(14px) scale(.97)} to{opacity:1;transform:translateY(0) scale(1)} }
 
-  .crs-card { transition:box-shadow .18s,transform .18s; }
+  .crs-card { transition:box-shadow .18s,transform .18s; cursor:pointer; }
   .crs-card:hover { box-shadow:0 8px 28px rgba(15,23,42,.13) !important; transform:translateY(-2px); }
+  .crs-card:focus-visible { outline:2px solid #6366f1; outline-offset:2px; }
   .icon-btn { transition:background .15s,transform .15s; border:none; cursor:pointer; }
   .icon-btn:hover { background:#f1f5f9 !important; transform:scale(1.08); }
+  .view-btn:hover { background:#eef2ff !important; }
   .del-btn:hover  { background:#fee2e2 !important; }
   .tab-btn { transition:all .15s; }
   .tab-btn:hover  { background:#f8fafc !important; }
@@ -107,12 +121,33 @@ const CSS = `
     background-size:400px 100%; animation:shimmer 1.4s infinite;
     border-radius:10px; height:88px;
   }
-  @media (max-width:900px) {
-    .crs-layout { flex-direction:column !important; }
-    .crs-side   { width:100% !important; }
+
+  /* ── Centered modal ── */
+  .crs-overlay {
+    position:fixed; inset:0; z-index:1000;
+    display:flex; align-items:center; justify-content:center;
+    padding:24px;
+    background:rgba(15,23,42,.55);
+    -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
+    animation:overlayIn .18s ease;
   }
+  .crs-modal {
+    width:100%;
+    max-height:calc(100dvh - 48px);
+    overflow-y:auto;
+    background:#fff; border:1px solid #e2e8f0; border-radius:16px;
+    padding:24px;
+    box-shadow:0 24px 60px rgba(15,23,42,.28);
+    animation:modalIn .24s cubic-bezier(.16,1,.3,1);
+  }
+  .crs-modal.is-form   { max-width:460px; }
+  .crs-modal.is-delete { max-width:380px; }
+
   @media (max-width:560px) {
     .stats-grid { grid-template-columns:repeat(2,1fr) !important; }
+    .dur-grid   { grid-template-columns:1fr !important; }
+    .crs-overlay { padding:14px; align-items:flex-end; }     /* bottom sheet feel on phones */
+    .crs-modal   { padding:18px !important; border-radius:16px; max-height:calc(100dvh - 28px); }
   }
 `;
 
@@ -174,16 +209,27 @@ const Spinner = () => (
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // COURSE CARD
+// Clicking anywhere on the card → onView(course) → navigate to detail page.
+// The View / Edit / Delete buttons stopPropagation so they don't also navigate.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const CourseCard = ({ course, idx, onEdit, onDelete }) => {
+const CourseCard = ({ course, idx, onView, onEdit, onDelete }) => {
   const accent   = CARD_ACCENTS[idx % CARD_ACCENTS.length];
   const initials = (course.code || course.name || 'C').slice(0,4).toUpperCase();
 
   return (
-    <div className="crs-card" style={{ background:'#fff', border:'1px solid #e2e8f0',
-      borderRadius:14, padding:'18px 20px', position:'relative', overflow:'hidden',
-      animation:'fadeUp .3s ease' }}>
+    <div
+      className="crs-card"
+      role="button"
+      tabIndex={0}
+      title="View course details"
+      onClick={() => onView(course)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onView(course); }
+      }}
+      style={{ background:'#fff', border:'1px solid #e2e8f0',
+        borderRadius:14, padding:'18px 20px', position:'relative', overflow:'hidden',
+        animation:'fadeUp .3s ease' }}>
 
       {/* Accent bar */}
       <div style={{ position:'absolute', top:0, left:0, right:0, height:3,
@@ -193,15 +239,16 @@ const CourseCard = ({ course, idx, onEdit, onDelete }) => {
       <div style={{ display:'flex', alignItems:'flex-start',
         justifyContent:'space-between', gap:12, marginTop:4 }}>
 
-        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:12, minWidth:0 }}>
           <div style={{ width:46, height:46, borderRadius:11, background:`${accent}18`,
             display:'flex', alignItems:'center', justifyContent:'center',
             fontFamily:'DM Mono, monospace', fontWeight:600, fontSize:'0.72rem',
             color:accent, flexShrink:0, letterSpacing:'0.5px' }}>
             {initials}
           </div>
-          <div>
-            <div style={{ fontWeight:700, fontSize:'0.92rem', color:'#0f172a', marginBottom:4 }}>
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontWeight:700, fontSize:'0.92rem', color:'#0f172a', marginBottom:4,
+              whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
               {course.name}
             </div>
             <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
@@ -211,13 +258,20 @@ const CourseCard = ({ course, idx, onEdit, onDelete }) => {
           </div>
         </div>
 
-        {/* Action buttons */}
+        {/* Action buttons — View / Edit / Delete */}
         <div style={{ display:'flex', gap:5, flexShrink:0 }}>
-          <button className="icon-btn" onClick={() => onEdit(course)}
+          <button className="icon-btn view-btn"
+            onClick={(e) => { e.stopPropagation(); onView(course); }}
+            style={{ width:30, height:30, borderRadius:7, background:'#f8fafc',
+              display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.8rem' }}
+            title="View">👁️</button>
+          <button className="icon-btn"
+            onClick={(e) => { e.stopPropagation(); onEdit(course); }}
             style={{ width:30, height:30, borderRadius:7, background:'#f8fafc',
               display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.8rem' }}
             title="Edit">✏️</button>
-          <button className="icon-btn del-btn" onClick={() => onDelete(course)}
+          <button className="icon-btn del-btn"
+            onClick={(e) => { e.stopPropagation(); onDelete(course); }}
             style={{ width:30, height:30, borderRadius:7, background:'#f8fafc',
               display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.8rem' }}
             title="Delete">🗑️</button>
@@ -230,9 +284,9 @@ const CourseCard = ({ course, idx, onEdit, onDelete }) => {
           { icon:'🏷️', label:'Code',     value: course.code || '—' },
           { icon:'⏱️', label:'Duration', value: fmtDuration(course.duration, course.durationUnit) },
           { icon:'📚', label:'Modules',  value: `${course.modules?.length || 0} modules` },
-          { icon:'🏷️', label:'Tags',     value: course.tags?.join(', ') || '—' },
+          { icon:'🔖', label:'Tags',     value: course.tags?.join(', ') || '—' },
         ].map(({ icon, label, value }) => (
-          <div key={label}>
+          <div key={label} style={{ minWidth:0 }}>
             <div style={{ fontSize:'0.66rem', fontWeight:600, color:'#94a3b8',
               textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:2 }}>
               {icon} {label}
@@ -310,12 +364,12 @@ const CourseForm = ({ editCourse, onClose }) => {
   };
 
   return (
-    <div style={{ animation:'slideIn .25s ease' }}>
+    <div style={{ animation:'fadeUp .25s ease' }}>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
-        <h3 style={{ fontWeight:700, fontSize:'1rem', color:'#0f172a' }}>
+        <h3 style={{ fontWeight:700, fontSize:'1rem', color:'#0f172a', margin:0 }}>
           {isEdit ? '✏️ Edit Course' : '➕ Add New Course'}
         </h3>
-        <button className="icon-btn" onClick={onClose}
+        <button type="button" className="icon-btn" onClick={onClose}
           style={{ width:28, height:28, borderRadius:6, background:'#f1f5f9',
             display:'flex', alignItems:'center', justifyContent:'center',
             fontSize:'0.88rem', color:'#64748b' }}>✕</button>
@@ -336,7 +390,7 @@ const CourseForm = ({ editCourse, onClose }) => {
         </FSelect>
 
         {/* Duration value + unit */}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+        <div className="dur-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
           <FInput label="Duration" required type="number" min="1"
             value={form.duration} onChange={e => set('duration', e.target.value)} />
           <FSelect label="Unit" required value={form.durationUnit}
@@ -373,7 +427,8 @@ const CourseForm = ({ editCourse, onClose }) => {
         <button type="submit" disabled={saving} className="sbtn"
           style={{ width:'100%', padding:'11px', borderRadius:9, border:'none',
             background: saving ? '#94a3b8' : 'linear-gradient(135deg,#6366f1,#4f46e5)',
-            color:'#fff', fontWeight:700, fontSize:'0.88rem', fontFamily:'inherit' }}>
+            color:'#fff', fontWeight:700, fontSize:'0.88rem', fontFamily:'inherit',
+            cursor: saving ? 'not-allowed' : 'pointer' }}>
           {saving
             ? (isEdit ? 'Saving…' : 'Creating…')
             : (isEdit ? 'Save Changes' : 'Create Course')}
@@ -423,6 +478,7 @@ const DeleteConfirm = ({ course, onConfirm, onCancel, deleting, deleteError }) =
 
 const Courses = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
 
   const courses      = useSelector(selectAllCourses);
   const status       = useSelector(selectCoursesStatus);
@@ -436,6 +492,38 @@ const Courses = () => {
   const [target, setTarget] = useState(null);
 
   useEffect(() => { dispatch(fetchCourses()); }, [dispatch]);
+
+  // ── Handlers ─────────────────────────────────────────────────────────────────
+  // View → navigate to the detail route that renders <CourseDetail/>:
+  //   <Route path="courses/:id" element={<CourseDetail />} />  (mounted under /admin)
+  const openView   = (c) => navigate(`/admin/courses/${c._id}`);
+  const openAdd    = ()  => { setTarget(null);  setPanel('add');    dispatch(clearCourseErrors()); };
+  const openEdit   = (c) => { setTarget(c);     setPanel('edit');   dispatch(clearCourseErrors()); };
+  const openDelete = (c) => { setTarget(c);     setPanel('delete'); dispatch(clearCourseErrors()); };
+  const closePanel = ()  => { setPanel(null);   setTarget(null);    dispatch(clearCourseErrors()); };
+
+  const handleDelete = async () => {
+    if (!target) return;
+    const result = await dispatch(deleteCourse(target._id));
+    if (deleteCourse.fulfilled.match(result)) {
+      toast.success(`"${target.name}" deleted`);
+      closePanel();
+    }
+    // Error shown inside DeleteConfirm via deleteError selector
+  };
+
+  // ── Modal UX: lock body scroll + close on Escape while a modal is open ───────
+  useEffect(() => {
+    if (!panel) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e) => { if (e.key === 'Escape') closePanel(); };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [panel]);
 
   // ── Derived ──────────────────────────────────────────────────────────────────
   const filtered = courses.filter(c => {
@@ -453,22 +541,6 @@ const Courses = () => {
     active:   courses.filter(c => c.status === 'active').length,
     draft:    courses.filter(c => c.status === 'draft').length,
     archived: courses.filter(c => c.status === 'archived').length,
-  };
-
-  // ── Handlers ─────────────────────────────────────────────────────────────────
-  const openAdd    = ()  => { setTarget(null);  setPanel('add'); dispatch(clearCourseErrors()); };
-  const openEdit   = (c) => { setTarget(c);     setPanel('edit'); dispatch(clearCourseErrors()); };
-  const openDelete = (c) => { setTarget(c);     setPanel('delete'); dispatch(clearCourseErrors()); };
-  const closePanel = ()  => { setPanel(null);   setTarget(null); dispatch(clearCourseErrors()); };
-
-  const handleDelete = async () => {
-    if (!target) return;
-    const result = await dispatch(deleteCourse(target._id));
-    if (deleteCourse.fulfilled.match(result)) {
-      toast.success(`"${target.name}" deleted`);
-      closePanel();
-    }
-    // Error shown inside DeleteConfirm via deleteError selector
   };
 
   const TABS = ['all', 'active', 'draft', 'archived'];
@@ -527,102 +599,101 @@ const Courses = () => {
           ))}
         </div>
 
-        {/* ── MAIN LAYOUT ── */}
-        <div className="crs-layout" style={{ display:'flex', gap:20, alignItems:'flex-start' }}>
+        {/* ── CONTENT (full width now) ── */}
+        <div style={{ minWidth:0 }}>
 
-          {/* ── CONTENT ── */}
-          <div style={{ flex:1, minWidth:0 }}>
-
-            {/* Search + Tabs */}
-            <div style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap', marginBottom:18 }}>
-              <div style={{ position:'relative', flex:1, minWidth:200 }}>
-                <span style={{ position:'absolute', left:11, top:'50%', transform:'translateY(-50%)',
-                  fontSize:'0.85rem', color:'#94a3b8' }}>🔍</span>
-                <input value={search} onChange={e => setSearch(e.target.value)}
-                  placeholder="Search by name, code, level, tag…"
-                  className="fi"
-                  style={{ width:'100%', border:'1.5px solid #e2e8f0', borderRadius:9,
-                    padding:'9px 12px 9px 34px', fontSize:'0.84rem', color:'#0f172a',
-                    background:'#fff', fontFamily:'inherit' }} />
-              </div>
-              <div style={{ display:'flex', background:'#f1f5f9', borderRadius:9, padding:3, gap:2 }}>
-                {TABS.map(t => (
-                  <button key={t} className={`tab-btn ${tab === t ? 'active' : ''}`}
-                    onClick={() => setTab(t)}
-                    style={{ padding:'6px 14px', borderRadius:7, border:'none',
-                      cursor:'pointer', fontSize:'0.78rem', fontWeight:600,
-                      color: tab === t ? '#0f172a' : '#64748b',
-                      background:'transparent', fontFamily:'inherit', textTransform:'capitalize' }}>
-                    {t}
-                  </button>
-                ))}
-              </div>
+          {/* Search + Tabs */}
+          <div style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap', marginBottom:18 }}>
+            <div style={{ position:'relative', flex:1, minWidth:200 }}>
+              <span style={{ position:'absolute', left:11, top:'50%', transform:'translateY(-50%)',
+                fontSize:'0.85rem', color:'#94a3b8' }}>🔍</span>
+              <input value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Search by name, code, level, tag…"
+                className="fi"
+                style={{ width:'100%', border:'1.5px solid #e2e8f0', borderRadius:9,
+                  padding:'9px 12px 9px 34px', fontSize:'0.84rem', color:'#0f172a',
+                  background:'#fff', fontFamily:'inherit' }} />
             </div>
-
-            {/* API error */}
-            {error && status === 'failed' && (
-              <div style={{ background:'#fef2f2', border:'1px solid #fecaca', borderRadius:9,
-                padding:'10px 14px', fontSize:'0.79rem', color:'#b91c1c', marginBottom:16 }}>
-                ⚠️ {error}
-              </div>
-            )}
-
-            {/* Shimmer loading */}
-            {status === 'loading' && (
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:14 }}>
-                {[1,2,3,4,5,6].map(i => <div key={i} className="shimmer-row" />)}
-              </div>
-            )}
-
-            {/* Course grid */}
-            {status !== 'loading' && filtered.length > 0 && (
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:14 }}>
-                {filtered.map((c, i) => (
-                  <CourseCard key={c._id} course={c} idx={i}
-                    onEdit={openEdit} onDelete={openDelete} />
-                ))}
-              </div>
-            )}
-
-            {/* Empty state */}
-            {status !== 'loading' && filtered.length === 0 && (
-              <div style={{ textAlign:'center', padding:'60px 20px', color:'#94a3b8' }}>
-                <div style={{ fontSize:'3rem', marginBottom:12 }}>📚</div>
-                <div style={{ fontWeight:600, fontSize:'0.95rem', marginBottom:6 }}>
-                  {search ? 'No courses match your search' : 'No courses yet'}
-                </div>
-                <div style={{ fontSize:'0.82rem' }}>
-                  Click "Add Course" to create the first one.
-                </div>
-              </div>
-            )}
+            <div style={{ display:'flex', background:'#f1f5f9', borderRadius:9, padding:3, gap:2 }}>
+              {TABS.map(t => (
+                <button key={t} className={`tab-btn ${tab === t ? 'active' : ''}`}
+                  onClick={() => setTab(t)}
+                  style={{ padding:'6px 14px', borderRadius:7, border:'none',
+                    cursor:'pointer', fontSize:'0.78rem', fontWeight:600,
+                    color: tab === t ? '#0f172a' : '#64748b',
+                    background:'transparent', fontFamily:'inherit', textTransform:'capitalize' }}>
+                  {t}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* ── SIDE PANEL ── */}
-          {panel && (
-            <div className="crs-side" style={{ width:340, flexShrink:0, background:'#fff',
-              border:'1px solid #e2e8f0', borderRadius:14, padding:'22px 20px',
-              boxShadow:'0 4px 20px rgba(15,23,42,.08)', animation:'slideIn .25s ease' }}>
-              {panel === 'delete' ? (
-                <DeleteConfirm
-                  course={target}
-                  deleting={deleteStatus === 'loading'}
-                  deleteError={deleteError}
-                  onConfirm={handleDelete}
-                  onCancel={closePanel}
-                />
-              ) : (
-                <CourseForm
-                  // key forces a fresh form when switching between courses / add↔edit
-                  key={panel === 'edit' ? target?._id : 'add'}
-                  editCourse={panel === 'edit' ? target : null}
-                  onClose={closePanel}
-                />
-              )}
+          {/* API error */}
+          {error && status === 'failed' && (
+            <div style={{ background:'#fef2f2', border:'1px solid #fecaca', borderRadius:9,
+              padding:'10px 14px', fontSize:'0.79rem', color:'#b91c1c', marginBottom:16 }}>
+              ⚠️ {error}
+            </div>
+          )}
+
+          {/* Shimmer loading */}
+          {status === 'loading' && (
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:14 }}>
+              {[1,2,3,4,5,6].map(i => <div key={i} className="shimmer-row" />)}
+            </div>
+          )}
+
+          {/* Course grid */}
+          {status !== 'loading' && filtered.length > 0 && (
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:14 }}>
+              {filtered.map((c, i) => (
+                <CourseCard key={c._id} course={c} idx={i}
+                  onView={openView} onEdit={openEdit} onDelete={openDelete} />
+              ))}
+            </div>
+          )}
+
+          {/* Empty state */}
+          {status !== 'loading' && filtered.length === 0 && (
+            <div style={{ textAlign:'center', padding:'60px 20px', color:'#94a3b8' }}>
+              <div style={{ fontSize:'3rem', marginBottom:12 }}>📚</div>
+              <div style={{ fontWeight:600, fontSize:'0.95rem', marginBottom:6 }}>
+                {search ? 'No courses match your search' : 'No courses yet'}
+              </div>
+              <div style={{ fontSize:'0.82rem' }}>
+                Click "Add Course" to create the first one.
+              </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* ── CENTERED MODAL (Add / Edit / Delete) ── */}
+      {panel && (
+        <div className="crs-overlay" onClick={closePanel} role="dialog" aria-modal="true">
+          <div
+            className={`crs-modal ${panel === 'delete' ? 'is-delete' : 'is-form'}`}
+            onClick={e => e.stopPropagation()}
+          >
+            {panel === 'delete' ? (
+              <DeleteConfirm
+                course={target}
+                deleting={deleteStatus === 'loading'}
+                deleteError={deleteError}
+                onConfirm={handleDelete}
+                onCancel={closePanel}
+              />
+            ) : (
+              <CourseForm
+                // key forces a fresh form when switching between courses / add↔edit
+                key={panel === 'edit' ? target?._id : 'add'}
+                editCourse={panel === 'edit' ? target : null}
+                onClose={closePanel}
+              />
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
