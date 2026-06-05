@@ -68,6 +68,7 @@ export const fetchTrainerStudents = createAsyncThunk(
         `${API}/api/trainer/students`,
         authHeader(getState)
       );
+      console.log(data)
       return data;
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || err.message || 'Failed to load students');

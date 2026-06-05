@@ -214,6 +214,9 @@ export const selectCourseUpdateError  = (s) => s.courses?.updateError  ?? null;
 export const selectCourseDeleteStatus = (s) => s.courses?.deleteStatus ?? 'idle';
 export const selectCourseDeleteError  = (s) => s.courses?.deleteError  ?? null;
 
+export const selectCourseDetailError = (s) => s.courses?.detailError ?? null;
+
+
 export default courseSlice.reducer;
 
 // ─── Store registration ───────────────────────────────────────────────────────

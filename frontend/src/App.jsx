@@ -34,6 +34,12 @@ import AdminReports      from './pages/admin/Reports';
 import AdminSupport      from './pages/admin/Support';
 import Courses from './pages/admin/Courses';
 import Profile from './pages/admin/Profilepage';
+import CourseDetail from './pages/admin/CourseDetail';
+import CourseCurriculumEditor from './pages/admin/CourseCurriculumEditor';
+import CourseSegment from './pages/trainee/CourseSegment';
+import LessonPlayer from './pages/trainee/LessonPlayer';
+import CourseTopic from './pages/trainee/CourseTopic';
+
 
 
 
@@ -49,6 +55,10 @@ import TrainerAssignments from './pages/trainer/Assignments';
 import TraineeDashboard  from './pages/trainee/Dashboard';
 import TraineeSessions   from './pages/trainee/Sessions';
 import TraineeAssignments from './pages/trainee/Assignments';
+import Trainee_Courses from './pages/trainee/Trainee_Courses';
+import Trainee_CourseDetail from './pages/trainee/Trainee_CourseDetail';
+
+
 
 import HRDashboard   from './pages/hr/Dashboard';
 import HRInterviews  from './pages/hr/Interviews';
@@ -113,6 +123,8 @@ function App() {
             <Route path="reports"      element={<AdminReports />} />
             <Route path="support"      element={<AdminSupport />} />
             <Route path="profile" element={<Profile />} />
+            <Route path="courses/:id" element={<CourseDetail />} />
+            <Route path="courses/:id/edit" element={<CourseCurriculumEditor/>} />
             <Route index element={<Navigate to="dashboard" replace />} />
 
 
@@ -140,6 +152,14 @@ function App() {
             <Route path="sessions"    element={<TraineeSessions />} />
             <Route path="assignments" element={<TraineeAssignments />} />
              <Route path="profile" element={<Profile />} />
+              <Route path="courses" element={<Trainee_Courses />} />
+              <Route path="coursess/:id" element={<Trainee_CourseDetail />} />
+
+              <Route path="coursess/:courseId" element={<Trainee_CourseDetail />} />
+              <Route path="coursess/:courseId/segment/:segmentId" element={<CourseSegment />} />
+              <Route path="coursess/:courseId/segment/:segmentId/:topicId" element={<CourseTopic />} />
+              <Route path="coursess/:courseId/segment/:segmentId/:topicId/:lessonId" element={<LessonPlayer />} />
+              
             <Route index element={<Navigate to="dashboard" replace />} />
           </Route>
         </Route>

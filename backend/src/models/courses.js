@@ -187,4 +187,6 @@ courseSchema.methods.toHoursMatrix = function () {
 courseSchema.index({ status: 1 });
 courseSchema.index({ 'trimesters.trimesterNumber': 1 });
 
+
+
 module.exports = mongoose.models.Course || mongoose.model('courses', courseSchema);
