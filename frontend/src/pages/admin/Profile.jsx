@@ -1,556 +1,698 @@
-// src/components/Profile.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Pencil,
-  Check,
-  X,
-  Lock,
-  Mail,
-  Phone,
-  Briefcase,
-  GraduationCap,
-  Plus,
-  Camera,
-  ShieldCheck,
-  Star,
-  Building2,
-  BadgeIndianRupee,
+  Activity, Award, BadgeCheck, BookOpen, BriefcaseBusiness, Building2,
+  CalendarDays, Camera, Check, ChevronDown, CircleUserRound, ClipboardList,
+  GraduationCap, Hash, Link2, Mail, MapPin, Pencil, Phone, ShieldCheck,
+  Sparkles, Target, UserRound, X,
 } from "lucide-react";
+import "./Profile.css";
+import "./Profile_photo_input.css";
 
-/* ------------------------------------------------------------------ *
- *  Brand icons — lucide-react removed LinkedIn/GitHub (trademark), so
- *  these tiny inline SVGs mimic lucide's API (accept className/props).
- * ------------------------------------------------------------------ */
-function Linkedin({ className, ...props }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true" {...props}>
-      <path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z" />
-    </svg>
-  );
-}
+const BASE_URL = "http://localhost:8080";
 
-function Github({ className, ...props }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true" {...props}>
-      <path d="M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58v-2.03c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.5.99.11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.31-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.25 2.87.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.62-5.49 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.83.58A12.01 12.01 0 0 0 24 12.5C24 5.87 18.63.5 12 .5z" />
-    </svg>
-  );
-}
+const COMMON_EDITABLE_FIELDS = [
+  "name", "phone", "bio", "linkedIn", "github", "gender",
+  "dateOfBirth", "address", "city", "state", "country", "pincode",
+];
 
-/* ------------------------------------------------------------------ *
- *  Profile.jsx
- *  ----------------------------------------------------------------
- *  A self-profile page. The signed-in user can edit PERSONAL fields
- *  only. Role / placement / HR-evaluation are managed by Admin & HR,
- *  so they render read-only (with a lock affordance).
- *
- *  Editable  : name, phone, bio, profilePicture, linkedIn, github,
- *              skills (trainee) | expertise (trainer)
- *  Read-only : email, role, status, batch, placement, hrEvaluation
- *
- *  Props
- *    user    : User document (see Mongoose model)
- *    onSave  : async (patch) => void   // called with edited fields
- * ------------------------------------------------------------------ */
-
-const ROLE_STYLE = {
-  admin:   "bg-rose-100 text-rose-700 ring-rose-200",
-  trainer: "bg-blue-100 text-blue-700 ring-blue-200",
-  trainee: "bg-violet-100 text-violet-700 ring-violet-200",
-  hr:      "bg-emerald-100 text-emerald-700 ring-emerald-200",
+const ROLE_EDITABLE_FIELDS = {
+  admin:   ["designation", "department", "employeeId", "experience", "specialization"],
+  hr:      ["designation", "department", "employeeId", "experience", "specialization"],
+  trainer: ["designation", "department", "expertise", "experience", "specialization", "certifications", "currentCompany", "portfolioUrl"],
+  trainee: ["skills", "collegeName", "degree", "branch", "graduationYear", "portfolioUrl", "resumeUrl"],
 };
 
-const PLACEMENT_STYLE = {
-  enrolled:            "bg-slate-100 text-slate-600",
-  training:            "bg-sky-100 text-sky-700",
-  ready:               "bg-amber-100 text-amber-700",
-  interview_scheduled: "bg-indigo-100 text-indigo-700",
-  placed:              "bg-emerald-100 text-emerald-700",
-  not_placed:          "bg-rose-100 text-rose-700",
+const ARRAY_FIELDS  = new Set(["skills", "expertise", "certifications"]);
+const NUMBER_FIELDS = new Set(["experience", "graduationYear"]);
+const DATE_FIELDS   = new Set(["dateOfBirth", "enrolledAt", "lastLoginAt", "placementUpdatedAt"]);
+
+const ROLE_META = {
+  admin:   { label: "Admin",   track: "LMS Administration",   icon: ShieldCheck,       accent: "admin"   },
+  trainee: { label: "Trainee", track: "Learning Program",     icon: GraduationCap,     accent: "trainee" },
+  trainer: { label: "Trainer", track: "Training Delivery",    icon: BriefcaseBusiness, accent: "trainer" },
+  hr:      { label: "HR",      track: "Placement Operations", icon: Building2,         accent: "hr"      },
 };
 
-/* ---------- small building blocks ---------------------------------- */
+const FIELD_LABELS = {
+  name: "Full name", phone: "Phone", bio: "Bio",
+  profilePicture: "Profile photo URL", linkedIn: "LinkedIn", github: "GitHub",
+  gender: "Gender", dateOfBirth: "Date of birth", address: "Address",
+  city: "City", state: "State", country: "Country", pincode: "Pincode",
+  designation: "Designation", department: "Department", employeeId: "Employee ID",
+  experience: "Experience", specialization: "Specialization", expertise: "Expertise",
+  certifications: "Certifications", currentCompany: "Current company",
+  portfolioUrl: "Portfolio", skills: "Skills", collegeName: "College name",
+  degree: "Degree", branch: "Branch", graduationYear: "Graduation year", resumeUrl: "Resume",
+};
+
+export function getEditableProfileKeys(role) {
+  return [...COMMON_EDITABLE_FIELDS, ...(ROLE_EDITABLE_FIELDS[role] || [])];
+}
+
+export function createProfileForm(user = {}) {
+  const keys = new Set([
+    ...COMMON_EDITABLE_FIELDS,
+    ...Object.values(ROLE_EDITABLE_FIELDS).flat(),
+  ]);
+  const form = {};
+  keys.forEach((key) => {
+    if (ARRAY_FIELDS.has(key))       form[key] = Array.isArray(user[key]) ? user[key] : [];
+    else if (DATE_FIELDS.has(key))   form[key] = toDateInput(user[key]);
+    else if (NUMBER_FIELDS.has(key)) form[key] = user[key] ?? "";
+    else                             form[key] = user[key] ?? "";
+  });
+  return form;
+}
+
+export function buildProfilePatch(form, user) {
+  const patch = {};
+  getEditableProfileKeys(user?.role).forEach((key) => {
+    const nextComparable = normalizeComparableValue(key, form[key]);
+    const prevComparable = normalizeComparableValue(key, user?.[key]);
+    if (ARRAY_FIELDS.has(key)) {
+      const changed =
+        nextComparable.length !== prevComparable.length ||
+        nextComparable.some((v, i) => v !== prevComparable[i]);
+      if (changed) patch[key] = nextComparable;
+      return;
+    }
+    if (nextComparable !== prevComparable) patch[key] = normalizeValueForSave(key, form[key]);
+  });
+  return patch;
+}
+
+function normalizeComparableValue(key, value) {
+  if (ARRAY_FIELDS.has(key))  return Array.isArray(value) ? value : [];
+  if (DATE_FIELDS.has(key))   return toDateInput(value);
+  if (NUMBER_FIELDS.has(key)) return value === null || value === undefined ? "" : String(value);
+  return value === null || value === undefined ? "" : String(value);
+}
+
+function normalizeValueForSave(key, value) {
+  if (ARRAY_FIELDS.has(key))  return Array.isArray(value) ? value : [];
+  if (DATE_FIELDS.has(key))   return value ? value : null;
+  if (NUMBER_FIELDS.has(key)) return value === "" || value === null || value === undefined ? null : Number(value);
+  return typeof value === "string" ? value.trim() : value;
+}
+
+function toDateInput(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
+function formatDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
 
 function initials(name = "") {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() || "")
-    .join("");
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "YN";
+  return parts.slice(0, 2).map((p) => p[0]?.toUpperCase()).join("");
 }
 
-function SectionCard({ title, icon: Icon, locked, children, action }) {
+function humanize(value = "") {
+  return String(value).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function isFilled(value) {
+  if (Array.isArray(value))      return value.length > 0;
+  if (typeof value === "number") return true;
+  return value !== null && value !== undefined && String(value).trim() !== "";
+}
+
+function getBatchLabel(batchId) {
+  if (!batchId) return "";
+  if (typeof batchId === "object") return batchId.name || batchId.title || batchId.batchName || batchId._id || "";
+  return batchId;
+}
+
+function getTrackLabel(user) {
+  const role = user?.role || "trainee";
+  if (role === "trainee") return user?.programName || user?.courseName || "Younovate Learning Program";
+  if (role === "trainer") return user?.specialization || user?.currentCompany || ROLE_META.trainer.track;
+  if (role === "hr")      return user?.department || ROLE_META.hr.track;
+  return user?.department || ROLE_META.admin.track;
+}
+
+function fieldValueForDisplay(field, form, user) {
+  if (field.getValue) return field.getValue(user);
+  if (field.readOnly)  return user?.[field.key];
+  return form[field.key];
+}
+
+function formatFieldValue(field, value) {
+  if (field.format)                    return field.format(value);
+  if (ARRAY_FIELDS.has(field.key))     return Array.isArray(value) ? value.join(", ") : "";
+  if (DATE_FIELDS.has(field.key))      return formatDate(value);
+  if (field.key === "role")            return humanize(value);
+  if (field.key === "isActive")        return value === false ? "Inactive" : "Active";
+  if (field.key === "placementStatus") return humanize(value || "enrolled");
+  if (field.suffix && isFilled(value)) return `${value} ${field.suffix}`;
+  return value;
+}
+
+function resolveProfileImageUrl(profilePicture) {
+  if (!profilePicture) return null;
+  if (profilePicture.startsWith("blob:")) return profilePicture;
+  if (profilePicture.startsWith("http"))  return profilePicture;
+  return `${BASE_URL}${profilePicture}`;
+}
+
+function makeSections(role) {
+  const commonImportant = [
+    { key: "name",        label: "Full name",     icon: UserRound,       placeholder: "Enter full name" },
+    { key: "email",       label: "Email",         icon: Mail,            readOnly: true },
+    { key: "phone",       label: "Phone",         icon: Phone,           placeholder: "+91 98765 43210" },
+    { key: "bio",         label: "Bio",           icon: ClipboardList,   type: "textarea", full: true, placeholder: "Short professional summary" },
+    { key: "gender",      label: "Gender",        icon: CircleUserRound, type: "select",   options: ["", "Male", "Female", "Other"] },
+    { key: "dateOfBirth", label: "Date of birth", icon: CalendarDays,    type: "date" },
+  ];
+  const locationContact = [
+    { key: "address",  label: "Address",  icon: MapPin, full: true, placeholder: "Street / locality" },
+    { key: "city",     label: "City" },
+    { key: "state",    label: "State" },
+    { key: "country",  label: "Country" },
+    { key: "pincode",  label: "Pincode" },
+    { key: "linkedIn", label: "LinkedIn", icon: Link2, type: "url", placeholder: "https://linkedin.com/in/..." },
+    { key: "github",   label: "GitHub",   icon: Link2, type: "url", placeholder: "https://github.com/..." },
+  ];
+
+  if (role === "trainee") {
+    return [
+      { id: "important", title: "Important Details",    icon: BadgeCheck,    fields: commonImportant },
+      { id: "program",   title: "Program Info",         icon: GraduationCap, fields: [
+          { key: "batchId",         label: "Batch ID",         icon: Hash,         readOnly: true, getValue: (u) => getBatchLabel(u?.batchId) },
+          { key: "placementStatus", label: "Placement status", icon: Target,       readOnly: true },
+          { key: "enrolledAt",      label: "Enrolled at",      icon: CalendarDays, readOnly: true },
+          { key: "skills",          label: "Skills",           icon: Sparkles,     type: "chips", full: true },
+        ],
+      },
+      { id: "learning", title: "Learning Preference", icon: BookOpen, fields: [
+          { key: "collegeName",    label: "College name",    icon: Building2,    full: true },
+          { key: "degree",         label: "Degree",          icon: GraduationCap },
+          { key: "branch",         label: "Branch" },
+          { key: "graduationYear", label: "Graduation year", icon: CalendarDays, type: "number" },
+        ],
+      },
+      { id: "contact",      title: "Location & Contact", icon: MapPin,            fields: locationContact },
+      { id: "professional", title: "Professional",        icon: BriefcaseBusiness, fields: [
+          { key: "portfolioUrl",  label: "Portfolio",      icon: Link2,     type: "url" },
+          { key: "resumeUrl",     label: "Resume",         icon: Link2,     type: "url" },
+          { key: "companyName",   label: "Placed company", icon: Building2, readOnly: true },
+          { key: "ctc",           label: "CTC",            readOnly: true },
+          { key: "placementNote", label: "Placement note", readOnly: true,  full: true },
+        ],
+      },
+    ];
+  }
+
+  if (role === "trainer") {
+    return [
+      { id: "important", title: "Important Details", icon: BadgeCheck,    fields: commonImportant },
+      { id: "program",   title: "Program Info",      icon: ClipboardList, fields: [
+          { key: "designation",    label: "Designation",     icon: BriefcaseBusiness },
+          { key: "department",     label: "Department",      icon: Building2 },
+          { key: "currentCompany", label: "Current company", icon: Building2 },
+          { key: "experience",     label: "Experience",      icon: Award, type: "number", suffix: "years" },
+          { key: "specialization", label: "Specialization",  icon: Target, full: true },
+        ],
+      },
+      { id: "learning", title: "Learning Preference", icon: Sparkles, fields: [
+          { key: "expertise",      label: "Expertise",      icon: Sparkles, type: "chips", full: true },
+          { key: "certifications", label: "Certifications", icon: Award,    type: "chips", full: true },
+        ],
+      },
+      { id: "contact",      title: "Location & Contact", icon: MapPin,            fields: locationContact },
+      { id: "professional", title: "Professional",        icon: BriefcaseBusiness, fields: [
+          { key: "portfolioUrl", label: "Portfolio",      icon: Link2,       type: "url" },
+          { key: "role",         label: "Role",           icon: ShieldCheck, readOnly: true },
+          { key: "isActive",     label: "Account status", icon: BadgeCheck,  readOnly: true },
+          { key: "lastLoginAt",  label: "Last login",     icon: Activity,    readOnly: true },
+        ],
+      },
+    ];
+  }
+
+  const peopleOpsFields = [
+    { key: "employeeId",     label: "Employee ID",    icon: Hash },
+    { key: "designation",    label: "Designation",    icon: BriefcaseBusiness },
+    { key: "department",     label: "Department",     icon: Building2 },
+    { key: "experience",     label: "Experience",     icon: Award, type: "number", suffix: "years" },
+    { key: "specialization", label: "Specialization", icon: Target, full: true },
+  ];
+
+  return [
+    { id: "important",    title: "Important Details",                      icon: BadgeCheck,                          fields: commonImportant },
+    { id: "program",      title: role === "hr" ? "HR Info" : "Admin Info", icon: role === "hr" ? Building2 : ShieldCheck, fields: peopleOpsFields },
+    { id: "contact",      title: "Location & Contact",                     icon: MapPin,                              fields: locationContact },
+    { id: "professional", title: "Professional",                           icon: BriefcaseBusiness,                   fields: [
+        { key: "role",        label: "Role",           icon: ShieldCheck, readOnly: true },
+        { key: "isActive",    label: "Account status", icon: BadgeCheck,  readOnly: true },
+        { key: "lastLoginAt", label: "Last login",     icon: Activity,    readOnly: true },
+      ],
+    },
+  ];
+}
+
+function getCompletion(form, keys) {
+  const completionKeys = keys.filter((k) => k !== "github");
+  if (!completionKeys.length) return 0;
+  const filled = completionKeys.filter((k) => isFilled(form[k])).length;
+  return Math.round((filled / completionKeys.length) * 100);
+}
+
+function getSectionMissing(section, form, user, editableKeys) {
+  return section.fields
+    .filter((f) => !f.readOnly && editableKeys.includes(f.key))
+    .filter((f) => !isFilled(fieldValueForDisplay(f, form, user))).length;
+}
+
+function scrollToSection(id) {
+  document.getElementById(`profile-section-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function HeroPill({ icon: Icon, label, value }) {
   return (
-    <section className="rounded-2xl border border-slate-200/80 bg-white shadow-sm">
-      <header className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
-        <div className="flex items-center gap-2.5">
-          {Icon && (
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 text-slate-600">
-              <Icon className="h-4 w-4" />
-            </span>
-          )}
-          <h2 className="text-sm font-semibold tracking-tight text-slate-800">
-            {title}
-          </h2>
-          {locked && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
-              <Lock className="h-3 w-3" /> Managed by Admin
-            </span>
-          )}
-        </div>
-        {action}
-      </header>
-      <div className="px-5 py-5 sm:px-6">{children}</div>
-    </section>
+    <span className="yp-hero-pill">
+      <Icon size={15} />
+      <span>{label}</span>
+      {value !== undefined && <strong>{value}</strong>}
+    </span>
   );
 }
 
-function Field({ label, icon: Icon, value, onChange, editing, type = "text", placeholder, full }) {
-  return (
-    <div className={full ? "sm:col-span-2" : ""}>
-      <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-slate-500">
-        {label}
-      </label>
-      {editing ? (
-        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 transition focus-within:border-indigo-400 focus-within:bg-white focus-within:ring-2 focus-within:ring-indigo-100">
-          {Icon && <Icon className="h-4 w-4 shrink-0 text-slate-400" />}
-          <input
-            type={type}
-            value={value}
-            placeholder={placeholder}
-            onChange={(e) => onChange(e.target.value)}
-            className="w-full bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
-          />
-        </div>
-      ) : (
-        <div className="flex items-center gap-2 py-1.5 text-sm text-slate-700">
-          {Icon && <Icon className="h-4 w-4 shrink-0 text-slate-400" />}
-          <span className={value ? "" : "text-slate-400"}>
-            {value || "Not provided"}
-          </span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ReadOnlyRow({ icon: Icon, label, children }) {
-  return (
-    <div className="flex items-start gap-3 py-2.5">
-      {Icon && (
-        <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-slate-50 text-slate-400">
-          <Icon className="h-3.5 w-3.5" />
-        </span>
-      )}
-      <div className="min-w-0">
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-          {label}
-        </p>
-        <div className="mt-0.5 text-sm text-slate-700">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-function ScoreBar({ label, value }) {
-  const tone =
-    value >= 80 ? "bg-emerald-500" : value >= 60 ? "bg-amber-500" : "bg-rose-500";
-  return (
-    <div>
-      <div className="mb-1 flex items-center justify-between">
-        <span className="text-xs font-medium text-slate-600">{label}</span>
-        <span className="text-xs font-semibold text-slate-800">{value}</span>
-      </div>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-        <div
-          className={`h-full rounded-full ${tone} transition-all duration-700`}
-          style={{ width: `${value}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function TagEditor({ tags, editing, onAdd, onRemove, accent = "indigo" }) {
+function ChipEditor({ value = [], editing, onChange, placeholder }) {
   const [draft, setDraft] = useState("");
-  const ring = `ring-${accent}-200`;
+  const tags = Array.isArray(value) ? value : [];
   const add = () => {
-    const v = draft.trim();
-    if (v && !tags.includes(v)) onAdd(v);
+    const next = draft.trim();
+    if (!next) return;
+    if (!tags.some((t) => t.toLowerCase() === next.toLowerCase())) onChange([...tags, next]);
     setDraft("");
   };
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {tags.length === 0 && !editing && (
-        <span className="text-sm text-slate-400">None added yet</span>
-      )}
-      {tags.map((t) => (
-        <span
-          key={t}
-          className={`inline-flex items-center gap-1.5 rounded-full bg-${accent}-50 px-3 py-1 text-xs font-medium text-${accent}-700 ring-1 ${ring}`}
-        >
-          {t}
+    <div className="yp-chip-field">
+      {tags.map((tag) => (
+        <span className="yp-chip" key={tag}>
+          {tag}
           {editing && (
-            <button
-              type="button"
-              onClick={() => onRemove(t)}
-              className="rounded-full p-0.5 hover:bg-white/60"
-              aria-label={`Remove ${t}`}
-            >
-              <X className="h-3 w-3" />
+            <button type="button" onClick={() => onChange(tags.filter((t) => t !== tag))} aria-label={`Remove ${tag}`}>
+              <X size={12} />
             </button>
           )}
         </span>
       ))}
       {editing && (
-        <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-300 px-2 py-1">
+        <span className="yp-chip-input-wrap">
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), add())}
-            placeholder="Add…"
-            className="w-20 bg-transparent text-xs text-slate-700 outline-none placeholder:text-slate-400"
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
+            placeholder={placeholder || "Add"}
           />
-          <button
-            type="button"
-            onClick={add}
-            className="grid h-5 w-5 place-items-center rounded-full bg-slate-800 text-white"
-            aria-label="Add tag"
-          >
-            <Plus className="h-3 w-3" />
-          </button>
+          <button type="button" onClick={add} aria-label="Add item"><Check size={13} /></button>
         </span>
+      )}
+      {!editing && tags.length === 0 && <span className="yp-empty-value">Not provided</span>}
+    </div>
+  );
+}
+
+function Field({ field, form, user, editing, editableKeys, onChange }) {
+  const canEdit      = editing && !field.readOnly && editableKeys.includes(field.key);
+  const Icon         = field.icon;
+  const rawValue     = fieldValueForDisplay(field, form, user);
+  const displayValue = formatFieldValue(field, rawValue);
+  const update       = (e) => onChange(field.key, e.target.value);
+
+  if (field.type === "chips") {
+    return (
+      <div className={`yp-field ${field.full ? "yp-field-full" : ""}`}>
+        <label>{field.label || FIELD_LABELS[field.key]}</label>
+        <ChipEditor value={rawValue} editing={canEdit} onChange={(value) => onChange(field.key, value)} placeholder="Add" />
+      </div>
+    );
+  }
+
+  return (
+    <div className={`yp-field ${field.full ? "yp-field-full" : ""}`}>
+      {canEdit ? (
+        <div className="yn-field-wrapper">
+          <label className="yn-label">{field.label || FIELD_LABELS[field.key]}</label>
+          <div className="yn-input-wrap">
+            {Icon && <Icon size={16} className="yn-icon" aria-hidden="true" />}
+            {field.type === "textarea" ? (
+              <textarea
+                value={rawValue || ""}
+                onChange={update}
+                placeholder={field.placeholder}
+                className="yn-input yn-textarea"
+                rows={4}
+              />
+            ) : field.type === "select" ? (
+              <select
+                value={rawValue || ""}
+                onChange={update}
+                className="yn-input yn-select"
+              >
+                {field.options.map((o) => <option key={o || "blank"} value={o}>{o || "Select"}</option>)}
+              </select>
+            ) : (
+              <input
+                type={field.type || "text"}
+                value={rawValue || ""}
+                onChange={update}
+                placeholder={field.placeholder}
+                className="yn-input"
+                min={field.type === "number" ? 0 : undefined}
+              />
+            )}
+          </div>
+        </div>
+      ) : (
+        <>
+          <label>{field.label || FIELD_LABELS[field.key]}</label>
+          <div className="yp-field-value">
+            {Icon && <Icon size={16} />}
+            {field.type === "url" && displayValue ? (
+              <a href={displayValue} target="_blank" rel="noreferrer">{displayValue}</a>
+            ) : (
+              <span className={isFilled(displayValue) ? "" : "yp-empty-value"}>
+                {isFilled(displayValue) ? displayValue : "Not provided"}
+              </span>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
 }
 
-/* ---------- main component ----------------------------------------- */
+function SectionCard({ section, form, user, editing, editableKeys, open, onToggle, onFieldChange }) {
+  const Icon    = section.icon;
+  const missing = getSectionMissing(section, form, user, editableKeys);
+  return (
+    <section className="yp-section-card" id={`profile-section-${section.id}`}>
+      <button className="yp-section-header" type="button" onClick={onToggle} aria-expanded={open}>
+        <span className="yp-section-title">
+          <span className="yp-section-icon"><Icon size={18} /></span>
+          <span>{section.title}</span>
+        </span>
+        <span className="yp-section-status">
+          {missing > 0 ? `${missing} due` : "Done"}
+          <ChevronDown size={18} className={open ? "yp-rotated" : ""} />
+        </span>
+      </button>
+      {open && (
+        <div className="yp-section-body">
+          <div className="yp-field-grid">
+            {section.fields.map((field) => (
+              <Field
+                key={field.key} field={field} form={form} user={user}
+                editing={editing} editableKeys={editableKeys} onChange={onFieldChange}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ── Main Profile component ──────────────────────────────────────────────────
 
 export default function Profile({ user, onSave }) {
-  const editableInit = useMemo(
-    () => ({
-      name: user?.name || "",
-      phone: user?.phone || "",
-      bio: user?.bio || "",
-      profilePicture: user?.profilePicture || "",
-      linkedIn: user?.linkedIn || "",
-      github: user?.github || "",
-      skills: [...(user?.skills || [])],
-      expertise: [...(user?.expertise || [])],
-    }),
-    [user]
-  );
+   console.log("🔄 Profile render — user.profilePicture:", user?.profilePicture);
+  console.log("🔄 Profile render — form.profilePicture:", /* add after form state */);
+  const editableKeys = useMemo(() => getEditableProfileKeys(user?.role), [user?.role]);
+  const sections     = useMemo(() => makeSections(user?.role), [user?.role]);
 
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState(editableInit);
+  const [form,         setForm]         = useState(() => createProfileForm(user));
+  const [editing,      setEditing]      = useState(false);
+  const [saving,       setSaving]       = useState(false);
+  const [photoSaving,  setPhotoSaving]  = useState(false);
+  const [openSections, setOpenSections] = useState({});
 
-  // Keep the form in sync with the backend `user`. useState only reads its
-  // initial value once, so without this the form would stay stuck on the data
-  // present at first render (sample / empty) and ignore data that arrives later
-  // from the API (fetchCurrentUser, or a fresh user after a successful save).
-  // We skip the resync while editing so an incoming update can't clobber the
-  // user's unsaved changes.
+  const photoInputRef = useRef(null);
+
+  // Sync form from Redux user whenever user updates AND we are NOT editing
   useEffect(() => {
-    if (!editing) setForm(editableInit);
-  }, [editableInit, editing]);
+    if (!editing) {
+      setForm(createProfileForm(user));
+    }
+  }, [user, editing]);
 
-  const isTrainee = user?.role === "trainee";
-  const isTrainer = user?.role === "trainer";
-  const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
+  // When entering edit mode keep any pending __profilePhotoFile
+  useEffect(() => {
+    if (editing) {
+      setForm((cur) => ({ ...cur, __profilePhotoFile: cur.__profilePhotoFile || null }));
+    }
+  }, [editing]);
+
+  // Default first two sections open
+  useEffect(() => {
+    setOpenSections((cur) => {
+      const next = { ...cur };
+      sections.forEach((s, i) => { if (next[s.id] === undefined) next[s.id] = i < 2; });
+      return next;
+    });
+  }, [sections]);
+
+  if (!user) return null;
+
+  const role         = user.role || "trainee";
+  const roleMeta     = ROLE_META[role] || ROLE_META.trainee;
+  const RoleIcon     = roleMeta.icon;
+  const completion   = getCompletion(form, editableKeys);
+  const activeStatus = user.isActive === false ? "Inactive" : "Active";
+  const profileImageUrl = resolveProfileImageUrl(form.profilePicture);
+
+  const updateField = (key, value) => setForm((cur) => ({ ...cur, [key]: value }));
 
   const cancel = () => {
-    setForm(editableInit);
+    setForm(createProfileForm(user));
     setEditing(false);
   };
 
+  // Save for the full Edit form (text fields + optional photo together)
   const save = async () => {
     setSaving(true);
     try {
-      // onSave may return false to signal "stay in edit mode" (e.g. no changes).
-      const result = await onSave?.(form);
-      if (result !== false) setEditing(false);
-    } catch {
-      // Save failed — keep the form open so the user can retry.
-      // The container surfaces the actual error message (toast / banner).
+      const blobUrl = form.profilePicture?.startsWith("blob:") ? form.profilePicture : null;
+      const saved   = await onSave?.(form);
+      if (saved !== false) {
+        if (blobUrl) URL.revokeObjectURL(blobUrl);
+        setEditing(false);
+      }
     } finally {
       setSaving(false);
     }
   };
 
-  const hr = user?.hrEvaluation;
+  // ── Avatar click → instant photo upload (no Edit mode needed) ─────────────
+  const handleAvatarClick = () => {
+    if (photoSaving) return;
+    photoInputRef.current?.click();
+  };
 
-  // No mock fallback: rely entirely on backend data. The container
-  // (ProfilePage) shows the loading state; if it ever renders us without a
-  // user, render nothing rather than crash.
-  if (!user) return null;
+  // const handlePhotoFileChange = async (e) => {
+  //   const file = e.target.files?.[0];
+  //   if (!file) return;
 
+  //   // Show blob preview immediately
+  //   const localUrl = URL.createObjectURL(file);
+  //   setForm((cur) => ({ ...cur, profilePicture: localUrl }));
+
+  //   setPhotoSaving(true);
+  //   try {
+  //     // Pass ONLY __profilePhotoFile so ProfilePage knows it's a photo-only call
+  //     // and skips buildProfilePatch / updateProfile entirely
+  //     await onSave?.({ __profilePhotoFile: file });
+  //     URL.revokeObjectURL(localUrl);
+  //     // useEffect([user, editing]) will sync form with fresh DB url automatically
+  //   } catch {
+  //     URL.revokeObjectURL(localUrl);
+  //     setForm((cur) => ({ ...cur, profilePicture: user?.profilePicture ?? "" }));
+  //   } finally {
+  //     setPhotoSaving(false);
+  //     if (photoInputRef.current) photoInputRef.current.value = "";
+  //   }
+  // };
+const handlePhotoFileChange = async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  const localUrl = URL.createObjectURL(file);
+  setForm((cur) => ({ ...cur, profilePicture: localUrl }));
+
+  setPhotoSaving(true);
+  try {
+    await onSave?.({ __profilePhotoFile: file });
+    // ✅ Do NOT revoke here — let the useEffect([user, editing]) run first
+    // which will call setForm(createProfileForm(user)) and replace the blob url
+    // with the real DB url. Only then is it safe to revoke.
+    setTimeout(() => URL.revokeObjectURL(localUrl), 3000); // safe delay
+  } catch {
+    URL.revokeObjectURL(localUrl);
+    setForm((cur) => ({ ...cur, profilePicture: user?.profilePicture ?? "" }));
+  } finally {
+    setPhotoSaving(false);
+    if (photoInputRef.current) photoInputRef.current.value = "";
+  }
+};
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100/60 font-sans antialiased">
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
-        .font-sans{font-family:'Plus Jakarta Sans',ui-sans-serif,system-ui,sans-serif}`}</style>
+    <div className="yp-page">
 
-      <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-10">
-        {/* ── Hero ─────────────────────────────────────────────── */}
-        <div className="relative overflow-hidden rounded-3xl border border-slate-200/70 bg-white shadow-sm">
-          <div className="h-24 bg-gradient-to-r from-indigo-500 via-blue-500 to-sky-400 sm:h-28" />
-          <div className="px-5 pb-5 sm:px-7 sm:pb-6">
-            <div className="-mt-10 flex flex-col gap-4 sm:-mt-12 sm:flex-row sm:items-end sm:justify-between">
-              <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-end">
-                <div className="relative">
-                  {form.profilePicture ? (
-                    <img
-                      src={form.profilePicture}
-                      alt={form.name}
-                      className="h-20 w-20 rounded-2xl border-4 border-white object-cover shadow-md sm:h-24 sm:w-24"
-                    />
-                  ) : (
-                    <div className="grid h-20 w-20 place-items-center rounded-2xl border-4 border-white bg-gradient-to-br from-indigo-500 to-blue-600 text-2xl font-bold text-white shadow-md sm:h-24 sm:w-24">
-                      {initials(form.name)}
-                    </div>
-                  )}
-                  {editing && (
-                    <span className="absolute -bottom-1 -right-1 grid h-7 w-7 place-items-center rounded-full bg-slate-900 text-white shadow ring-2 ring-white">
-                      <Camera className="h-3.5 w-3.5" />
-                    </span>
-                  )}
-                </div>
-                <div className="pb-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
-                      {form.name || "Your name"}
-                    </h1>
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ring-1 ${
-                        ROLE_STYLE[user.role] || ROLE_STYLE.trainee
-                      }`}
-                    >
-                      {user.role}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex items-center gap-2 text-sm text-slate-500">
-                    <Mail className="h-3.5 w-3.5" />
-                    {user.email}
-                  </div>
-                </div>
-              </div>
-
-              {/* Edit / Save actions (desktop) */}
-              <div className="hidden sm:flex sm:items-center sm:gap-2">
-                {!editing ? (
-                  <button
-                    onClick={() => setEditing(true)}
-                    className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 active:scale-95"
-                  >
-                    <Pencil className="h-4 w-4" /> Edit profile
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      onClick={cancel}
-                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
-                    >
-                      <X className="h-4 w-4" /> Cancel
-                    </button>
-                    <button
-                      onClick={save}
-                      disabled={saving}
-                      className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500 active:scale-95 disabled:opacity-60"
-                    >
-                      <Check className="h-4 w-4" /> {saving ? "Saving…" : "Save changes"}
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
+      {/* ── Sidebar rail ── */}
+      <aside className="yp-rail" aria-label="Profile sections">
+        <div className="yp-progress-card">
+          <div className="yp-progress-title">
+            <span className="yp-mini-avatar">
+              {profileImageUrl ? <img src={profileImageUrl} alt="" /> : initials(form.name)}
+            </span>
+            <span>{form.name || "Your Profile"}</span>
+          </div>
+          <div className="yp-progress-meta">
+            <span>Profile Progress</span>
+            <strong>{completion}%</strong>
+          </div>
+          <div className="yp-progress-track" aria-hidden="true">
+            <span style={{ width: `${completion}%` }} />
           </div>
         </div>
 
-        {/* ── Body ─────────────────────────────────────────────── */}
-        <div className="mt-5 space-y-5">
-          {/* Personal info (editable) */}
-          <SectionCard
-            title="Personal Information"
-            icon={ShieldCheck}
-            action={
-              !editing && (
-                <button
-                  onClick={() => setEditing(true)}
-                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-500"
-                >
-                  Edit
-                </button>
-              )
-            }
-          >
-            <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
-              <Field label="Full name" value={form.name} onChange={set("name")} editing={editing} placeholder="Your name" />
-              <Field label="Phone" icon={Phone} value={form.phone} onChange={set("phone")} editing={editing} placeholder="+91 …" />
-              <div className="sm:col-span-2">
-                <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-slate-500">
-                  Bio
-                </label>
-                {editing ? (
-                  <textarea
-                    value={form.bio}
-                    onChange={(e) => set("bio")(e.target.value)}
-                    rows={3}
-                    placeholder="Tell us a little about yourself…"
-                    className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-100 placeholder:text-slate-400"
-                  />
-                ) : (
-                  <p className={`text-sm leading-relaxed ${form.bio ? "text-slate-700" : "text-slate-400"}`}>
-                    {form.bio || "No bio added yet."}
-                  </p>
-                )}
-              </div>
-              {editing && (
-                <Field
-                  full
-                  label="Profile picture URL"
-                  icon={Camera}
-                  value={form.profilePicture}
-                  onChange={set("profilePicture")}
-                  editing={editing}
-                  placeholder="https://…"
-                />
-              )}
-            </div>
-          </SectionCard>
+        <nav className="yp-section-nav">
+          {sections.map((section) => {
+            const Icon    = section.icon;
+            const missing = getSectionMissing(section, form, user, editableKeys);
+            return (
+              <button key={section.id} type="button" onClick={() => scrollToSection(section.id)}>
+                <span className={`yp-nav-icon ${missing > 0 ? "yp-nav-due" : ""}`}>
+                  <Icon size={16} />
+                </span>
+                <span>{section.title}</span>
+                {missing > 0 && <em>Due</em>}
+              </button>
+            );
+          })}
+        </nav>
+      </aside>
 
-          {/* Social links (editable) */}
-          <SectionCard title="Social Links" icon={Linkedin}>
-            <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
-              <Field label="LinkedIn" icon={Linkedin} value={form.linkedIn} onChange={set("linkedIn")} editing={editing} placeholder="linkedin.com/in/…" />
-              <Field label="GitHub" icon={Github} value={form.github} onChange={set("github")} editing={editing} placeholder="github.com/…" />
-            </div>
-          </SectionCard>
+      {/* ── Main content ── */}
+      <main className="yp-main">
+        <header className="yp-hero">
 
-          {/* Skills / Expertise (editable, role-aware) */}
-          {(isTrainee || isTrainer) && (
-            <SectionCard
-              title={isTrainer ? "Areas of Expertise" : "Skills"}
-              icon={isTrainer ? Briefcase : GraduationCap}
+          {/* ── Avatar — always clickable, no Edit mode required ── */}
+          <div className="yp-avatar-wrap">
+
+            {/* Hidden file input — always in DOM */}
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={handlePhotoFileChange}
+            />
+
+            {/* Clickable wrapper */}
+            <div
+              className="yp-avatar-click-wrap"
+              onClick={handleAvatarClick}
+              title="Click to change profile photo"
+              style={{ cursor: photoSaving ? "wait" : "pointer", position: "relative", display: "inline-block" }}
             >
-              {isTrainer ? (
-                <TagEditor
-                  tags={form.expertise}
-                  editing={editing}
-                  accent="blue"
-                  onAdd={(t) => setForm((f) => ({ ...f, expertise: [...f.expertise, t] }))}
-                  onRemove={(t) => setForm((f) => ({ ...f, expertise: f.expertise.filter((x) => x !== t) }))}
+              {profileImageUrl ? (
+                <img
+                  className="yp-avatar"
+                  src={profileImageUrl}
+                  alt={form.name || "Profile"}
+                  style={{ opacity: photoSaving ? 0.5 : 1, transition: "opacity 0.2s" }}
+                  onError={(e) => { e.target.onerror = null; e.target.style.display = "none"; }}
                 />
               ) : (
-                <TagEditor
-                  tags={form.skills}
-                  editing={editing}
-                  accent="violet"
-                  onAdd={(t) => setForm((f) => ({ ...f, skills: [...f.skills, t] }))}
-                  onRemove={(t) => setForm((f) => ({ ...f, skills: f.skills.filter((x) => x !== t) }))}
-                />
-              )}
-            </SectionCard>
-          )}
-
-          {/* Placement (read-only, trainee only) */}
-          {isTrainee && (
-            <SectionCard title="Placement" icon={Briefcase} locked>
-              <div className="grid grid-cols-1 gap-x-6 sm:grid-cols-2">
-                <ReadOnlyRow icon={GraduationCap} label="Batch">
-                  {user.batchId || "—"}
-                </ReadOnlyRow>
-                <ReadOnlyRow label="Status">
-                  <span
-                    className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${
-                      PLACEMENT_STYLE[user.placementStatus] || PLACEMENT_STYLE.enrolled
-                    }`}
-                  >
-                    {(user.placementStatus || "enrolled").replace(/_/g, " ")}
-                  </span>
-                </ReadOnlyRow>
-                {user.companyName && (
-                  <ReadOnlyRow icon={Building2} label="Company">
-                    {user.companyName}
-                  </ReadOnlyRow>
-                )}
-                {user.ctc && (
-                  <ReadOnlyRow icon={BadgeIndianRupee} label="CTC">
-                    {user.ctc}
-                  </ReadOnlyRow>
-                )}
-                {user.placementNote && (
-                  <div className="sm:col-span-2">
-                    <ReadOnlyRow label="Note">{user.placementNote}</ReadOnlyRow>
-                  </div>
-                )}
-              </div>
-            </SectionCard>
-          )}
-
-          {/* HR evaluation (read-only) */}
-          {isTrainee && hr && (
-            <SectionCard title="HR Evaluation" icon={Star} locked>
-              <div className="mb-5 flex items-center gap-4 rounded-2xl bg-gradient-to-r from-indigo-50 to-blue-50 px-4 py-3">
-                <div className="grid h-14 w-14 place-items-center rounded-2xl bg-white text-lg font-bold text-indigo-600 shadow-sm">
-                  {hr.overallScore ?? "—"}
+                <div
+                  className={`yp-avatar yp-avatar-fallback yp-role-${role}`}
+                  style={{ opacity: photoSaving ? 0.5 : 1, transition: "opacity 0.2s" }}
+                >
+                  {initials(form.name)}
                 </div>
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Overall score
-                  </p>
-                  <p className="text-sm font-semibold text-slate-800">
-                    {hr.overallScore >= 80 ? "Excellent" : hr.overallScore >= 60 ? "Good" : "Needs work"}
-                  </p>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <ScoreBar label="Communication" value={hr.communication ?? 0} />
-                <ScoreBar label="Technical" value={hr.technical ?? 0} />
-                <ScoreBar label="Confidence" value={hr.confidence ?? 0} />
-              </div>
-              {hr.recommendation && (
-                <p className="mt-5 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                  <span className="font-semibold text-slate-700">Recommendation: </span>
-                  {hr.recommendation}
-                </p>
               )}
-            </SectionCard>
-          )}
-        </div>
-      </div>
 
-      {/* ── Sticky action bar (mobile) ───────────────────────── */}
-      {editing && (
-        <div className="sticky bottom-0 z-10 border-t border-slate-200 bg-white/90 px-4 py-3 backdrop-blur sm:hidden">
-          <div className="mx-auto flex max-w-3xl gap-2">
-            <button
-              onClick={cancel}
-              className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-600"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={save}
-              disabled={saving}
-              className="flex-1 rounded-xl bg-indigo-600 py-3 text-sm font-semibold text-white disabled:opacity-60"
-            >
-              {saving ? "Saving…" : "Save changes"}
-            </button>
+              {/* Camera icon — pointerEvents none so clicks bubble to wrapper */}
+              <span
+                className="yp-camera"
+                aria-label="Upload profile photo"
+                style={{ opacity: photoSaving ? 0.3 : 1, pointerEvents: "none" }}
+              >
+                <Camera size={16} />
+              </span>
+            </div>
           </div>
-        </div>
-      )}
 
-      {/* Floating edit button (mobile, view mode) */}
-      {!editing && (
-        <button
-          onClick={() => setEditing(true)}
-          className="fixed bottom-5 right-5 z-10 inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-lg sm:hidden"
-        >
-          <Pencil className="h-4 w-4" /> Edit
-        </button>
-      )}
+          {/* ── Hero copy ── */}
+          <div className="yp-hero-copy">
+            <div className="yp-hero-heading">
+              <h2>{form.name || "Your name"}</h2>
+              <span className={`yp-role-chip yp-role-${role}`}>
+                <RoleIcon size={14} />
+                {roleMeta.label}
+              </span>
+            </div>
+            <p>{form.bio || "Add a short bio so your team knows what you are working on."}</p>
+            <div className="yp-program-line">
+              <span>{role === "trainee" ? "Program name" : "Profile track"}</span>
+              <strong>{getTrackLabel(user)}</strong>
+            </div>
+            <div className="yp-hero-pills">
+              <HeroPill icon={BadgeCheck} label="Status"  value={activeStatus} />
+              <HeroPill icon={Award}      label="Profile" value={`${completion}%`} />
+              <HeroPill
+                icon={role === "trainee" ? Sparkles : BriefcaseBusiness}
+                label={role === "trainee" ? "Skills" : "Experience"}
+                value={role === "trainee" ? (form.skills || []).length : form.experience || 0}
+              />
+              <HeroPill icon={Activity} label="Activity Details" />
+            </div>
+          </div>
+
+          {/* ── Edit / Save / Cancel ── */}
+          <div className="yp-hero-actions">
+            {!editing ? (
+              <button className="yp-primary-btn" type="button" onClick={() => setEditing(true)}>
+                <Pencil size={16} /> Edit
+              </button>
+            ) : (
+              <>
+                <button className="yp-ghost-btn" type="button" onClick={cancel} disabled={saving}>
+                  <X size={16} /> Cancel
+                </button>
+                <button className="yp-primary-btn" type="button" onClick={save} disabled={saving}>
+                  <Check size={16} /> {saving ? "Saving…" : "Save"}
+                </button>
+              </>
+            )}
+          </div>
+        </header>
+
+        {/* ── Section cards ── */}
+        <div className="yp-sections">
+          {sections.map((section) => (
+            <SectionCard
+              key={section.id}
+              section={section} form={form} user={user}
+              editing={editing} editableKeys={editableKeys}
+              open={Boolean(openSections[section.id])}
+              onToggle={() => setOpenSections((cur) => ({ ...cur, [section.id]: !cur[section.id] }))}
+              onFieldChange={updateField}
+            />
+          ))}
+        </div>
+      </main>
     </div>
   );
 }

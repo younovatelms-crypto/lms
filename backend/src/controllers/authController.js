@@ -62,7 +62,6 @@ const login = async (req, res) => {
   const user = await User.findOne({ email: email.toLowerCase() }).select('+password +sessionToken');
   if (!user || !(await user.comparePassword(password)))
     return res.status(401).json({ success: false, message: 'Invalid email or password' });
-
   if (!user.isActive)
     return res.status(403).json({ success: false, message: 'Account has been deactivated. Contact admin.' });
 
@@ -122,7 +121,11 @@ const getMe = async (req, res) => {
    Response: { success, user }
 ──────────────────────────────────────────────────────────────────────────── */
 const updateProfile = async (req, res) => {
-  const allowed = ['name', 'phone', 'bio', 'profilePicture', 'linkedIn', 'github', 'skills', 'expertise'];
+  const allowed = ['name','phone','bio','profilePicture','linkedIn','github','skills',
+  'gender','dateOfBirth','designation','department','address','city','state','country','pincode',  
+  'expertise','designation', 'experience','specialization','certifications','currentCompany','portfolioUrl',
+  'collegeName','degree','branch','graduationYear','portfolioUrl','resumeUrl',
+  'designation','department','employeeId','experience','specialization'];
   const updates = {};
   allowed.forEach(f => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
 
@@ -243,4 +246,28 @@ const resetPassword = async (req, res) => {
   return res.json({ success: true, message: 'Password reset. Please log in with your new password.' });
 };
 
-module.exports = { register, login, logout, refresh, getMe, updateProfile, changePassword, forgotPassword, verifyOtp, resetPassword };
+/* ── UPDATE PROFILE PHOTO ─────────────────────────────────────────────────
+   PUT /api/auth/profile-photo   [protected]
+   multipart/form-data: field `profilePhoto`
+   Response: { success, user }
+  ────────────────────────────────────────────────────────────────────────── */
+  const updateProfilePhoto = async (req, res) => {
+    // multer throws / populates req.file; keep controller simple
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'Profile photo is required' });
+    }
+
+    // Store a served URL (server serves /uploads)
+    const relativeUrl = `/uploads/profile-pictures/${req.file.filename}`;
+
+    const user = await User.findByIdAndUpdate(
+
+      req.user._id,
+      { profilePicture: relativeUrl },
+      { new: true, runValidators: true }
+    );
+
+    return res.json({ success: true, user: user.toPublic() });
+  };
+
+module.exports = { register, login, logout, refresh, getMe, updateProfile, updateProfilePhoto, changePassword, forgotPassword, verifyOtp, resetPassword };

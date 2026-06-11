@@ -45,6 +45,16 @@ router.get('/me', protect, getMe);
 //   Body: { name?, phone?, bio?, profilePicture?, linkedIn?, github?, skills?, expertise? }
 router.put('/profile', protect, updateProfile);
 
+// PUT /api/auth/profile-photo  [requires JWT]
+//   multipart/form-data with field `profilePhoto`
+router.put(
+  '/profile-photo',
+  protect,
+  require('../middleware/upload').uploadProfilePhoto,
+  require('../controllers/authController').updateProfilePhoto
+);
+
+
 // PUT  /api/auth/change-password  [requires JWT]
 //   Body: { currentPassword: string, newPassword: string }
 router.put('/change-password', protect, changePassword);
