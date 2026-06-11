@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 
 import {
   fetchSessions,
   createSession,
-  updateSession,
   deleteSession,
   endSession,
   markAttendance,
@@ -1023,8 +1023,12 @@ const fmtDateShort = (raw) => {
   return isNaN(d) ? '—' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
-const RowActions = ({ s, onEdit, onDelete, deleting }) => (
+const RowActions = ({ s, onView, onEdit, onDelete, deleting }) => (
   <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+    <button onClick={() => onView(s)} className="ts-btn" title="View"
+      style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid #c7d2fe', background: '#eef2ff', color: '#4338ca', fontSize: '0.74rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+      👁 View
+    </button>
     <button onClick={() => onEdit(s)} className="ts-btn" title="Edit"
       style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid #d1d5db', background: '#fff', color: '#374151', fontSize: '0.74rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
       ✏️ Edit
@@ -1036,7 +1040,7 @@ const RowActions = ({ s, onEdit, onDelete, deleting }) => (
   </div>
 );
 
-const SessionTable = ({ sessions, onEdit, onDelete, deletingId }) => {
+const SessionTable = ({ sessions, onView, onEdit, onCreate, onDelete, deletingId }) => {
   const [query, setQuery]     = useState('');
   const [statusF, setStatusF] = useState('all');
   const [page, setPage]       = useState(1);
@@ -1083,6 +1087,10 @@ const SessionTable = ({ sessions, onEdit, onDelete, deletingId }) => {
             </select>
             <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#6b7280', fontSize: '0.7rem', pointerEvents: 'none' }}>▾</span>
           </div>
+          <button onClick={onCreate} className="ts-btn" title="Create a new session"
+            style={{ padding: '8px 14px', borderRadius: 8, border: 'none', background: '#1e293b', color: '#fff', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+            + New Session
+          </button>
         </div>
       </div>
 
@@ -1125,7 +1133,7 @@ const SessionTable = ({ sessions, onEdit, onDelete, deletingId }) => {
                       <td style={{ padding: '12px', fontSize: '0.8rem', color: '#475569', whiteSpace: 'nowrap' }}>{fmtDateShort(rawDate(s))}</td>
                       <td style={{ padding: '12px', fontSize: '0.8rem', color: '#475569', whiteSpace: 'nowrap' }}>{fmtTime(rawDate(s)) || '—'}{s.durationMinutes ? ` · ${s.durationMinutes}m` : ''}</td>
                       <td style={{ padding: '12px' }}><StatusPill status={s.status} /></td>
-                      <td style={{ padding: '12px' }}><RowActions s={s} onEdit={onEdit} onDelete={onDelete} deleting={deletingId === s._id} /></td>
+                      <td style={{ padding: '12px' }}><RowActions s={s} onView={onView} onEdit={onEdit} onDelete={onDelete} deleting={deletingId === s._id} /></td>
                     </tr>
                   );
                 })}
@@ -1155,7 +1163,7 @@ const SessionTable = ({ sessions, onEdit, onDelete, deletingId }) => {
                     <span>📅 {fmtDateShort(rawDate(s))}</span>
                     <span>🕒 {fmtTime(rawDate(s)) || '—'}</span>
                   </div>
-                  <RowActions s={s} onEdit={onEdit} onDelete={onDelete} deleting={deletingId === s._id} />
+                  <RowActions s={s} onView={onView} onEdit={onEdit} onDelete={onDelete} deleting={deletingId === s._id} />
                 </div>
               );
             })}
@@ -1164,150 +1172,6 @@ const SessionTable = ({ sessions, onEdit, onDelete, deletingId }) => {
           <Pagination page={page} pageCount={pageCount} onChange={setPage} />
         </>
       )}
-    </div>
-  );
-};
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// EDIT SESSION MODAL  (PUT /api/trainer/sessions/:id)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-const EDIT_STATUSES = ['scheduled', 'live', 'completed', 'cancelled'];
-
-const EditSessionModal = ({ session, batches, saving, error, onSave, onClose }) => {
-  const [f, setF] = useState(() => {
-    const raw   = rawDate(session);
-    const d     = raw ? new Date(raw) : new Date();
-    const valid = !isNaN(d);
-    return {
-      batchName:    session.batchId?.name || session.batchName || session.batch || '',
-      title:        session.moduleId || session.title || '',
-      sessType:     sessTypeOf(session) || 'S1',
-      date:         valid ? toDateInput(d) : toDateInput(new Date()),
-      time:         valid ? d.toTimeString().slice(0, 5) : '10:00',
-      duration:     session.durationMinutes || 60,
-      status:       session.status || 'scheduled',
-      roomName:     session.roomName || '',
-      recordingUrl: session.recordingUrl || '',
-      description:  session.description || '',
-    };
-  });
-  const set = (k) => (e) => setF(prev => ({ ...prev, [k]: e.target.value }));
-
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
-  }, [onClose]);
-
-  const submit = (e) => {
-    e.preventDefault();
-    const scheduledAt = new Date(`${f.date}T${f.time}:00`).toISOString();
-    onSave(session._id, {
-      batch:           f.batchName || undefined,    // backend resolves name → _id
-      title:           f.title,
-      moduleId:        f.title,
-      sessionType:     f.sessType,
-      scheduledAt,
-      durationMinutes: Number(f.duration) || 60,
-      status:          f.status,
-      roomName:        f.roomName,
-      recordingUrl:    f.recordingUrl || undefined,
-      description:     f.description,
-    });
-  };
-
-  const chev = (
-    <span style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', color: '#6b7280', fontSize: '0.7rem', pointerEvents: 'none' }}>▾</span>
-  );
-
-  return (
-    <div className="ts-overlay" onClick={onClose}>
-      <form className="ts-modal" onClick={e => e.stopPropagation()} onSubmit={submit}>
-        {/* Header */}
-        <div style={{ position: 'sticky', top: 0, background: '#fff', borderBottom: '1px solid #eef2f7', padding: '18px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 1 }}>
-          <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#111827' }}>Edit Session</h3>
-          <button type="button" onClick={onClose} className="ts-btn" aria-label="Close"
-            style={{ background: '#f1f5f9', border: 'none', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: '1.2rem', color: '#64748b', lineHeight: 1 }}>×</button>
-        </div>
-
-        {/* Body */}
-        <div style={{ padding: '18px 22px 8px' }}>
-          <div style={{ marginBottom: 14 }}>
-            <FL>Title / Module ID</FL>
-            <input value={f.title} onChange={set('title')} style={inputSt} required />
-          </div>
-
-          <div className="ts-cascade" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
-            <div>
-              <FL>Batch</FL>
-              <div style={{ position: 'relative' }}>
-                <select value={f.batchName} onChange={set('batchName')} style={selSt}>
-                  <option value="">— select batch —</option>
-                  {batches.map(b => <option key={b._id} value={b.name}>{b.name}</option>)}
-                </select>
-                {chev}
-              </div>
-            </div>
-            <div>
-              <FL>Status</FL>
-              <div style={{ position: 'relative' }}>
-                <select value={f.status} onChange={set('status')} style={{ ...selSt, textTransform: 'capitalize' }}>
-                  {EDIT_STATUSES.map(st => <option key={st} value={st}>{st}</option>)}
-                </select>
-                {chev}
-              </div>
-            </div>
-          </div>
-
-          <div style={{ marginBottom: 14 }}>
-            <FL>Session Type</FL>
-            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-              {SESSION_TYPES.map(t => (
-                <label key={t} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.84rem', color: '#374151', cursor: 'pointer' }}>
-                  <input type="radio" name="editSessType" value={t} checked={f.sessType === t} onChange={() => setF(p => ({ ...p, sessType: t }))} style={{ accentColor: '#6366f1', width: 15, height: 15 }} />
-                  {t}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="ts-datetime" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 14 }}>
-            <div><FL>Date</FL><input type="date" value={f.date} onChange={set('date')} style={inputSt} required /></div>
-            <div><FL>Time</FL><input type="time" value={f.time} onChange={set('time')} style={inputSt} required /></div>
-            <div><FL>Duration (min)</FL><input type="number" min={15} step={5} value={f.duration} onChange={set('duration')} style={inputSt} required /></div>
-          </div>
-
-          <div style={{ marginBottom: 14 }}>
-            <FL>Room Name (optional)</FL>
-            <input value={f.roomName} onChange={set('roomName')} style={inputSt} placeholder="Room / hall" />
-          </div>
-          <div style={{ marginBottom: 14 }}>
-            <FL>Recording Link (optional)</FL>
-            <input type="url" value={f.recordingUrl} onChange={set('recordingUrl')} style={inputSt} placeholder="https://…" />
-          </div>
-          <div style={{ marginBottom: 6 }}>
-            <FL>Description</FL>
-            <textarea value={f.description} onChange={set('description')} rows={3} style={{ ...inputSt, resize: 'vertical' }} placeholder="What will be covered…" />
-          </div>
-
-          <ErrBox msg={error} />
-        </div>
-
-        {/* Footer */}
-        <div style={{ position: 'sticky', bottom: 0, background: '#fff', borderTop: '1px solid #eef2f7', padding: '14px 22px', display: 'flex', gap: 10 }}>
-          <button type="button" onClick={onClose} disabled={saving} className="ts-btn"
-            style={{ flex: 1, padding: '11px', borderRadius: 9, border: '1px solid #d1d5db', background: '#fff', color: '#374151', fontWeight: 700, fontSize: '0.86rem', cursor: 'pointer', fontFamily: 'inherit' }}>
-            Cancel
-          </button>
-          <button type="submit" disabled={saving} className="ts-btn"
-            style={{ flex: 2, padding: '11px', borderRadius: 9, border: 'none', background: '#1e293b', color: '#fff', fontWeight: 700, fontSize: '0.86rem', cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
-            {saving ? 'Saving…' : 'Save Changes'}
-          </button>
-        </div>
-      </form>
     </div>
   );
 };
@@ -1339,11 +1203,10 @@ const TrainerSessions = () => {
   const [selectedDate, setSelectedDate] = useState(new Date()); // agenda focus
   const [formDate,     setFormDate]     = useState(toDateInput(new Date())); // synced into form
   const [modalDay,     setModalDay]     = useState(null);       // open popup for this day
-  const [editSession,  setEditSession]  = useState(null);       // session being edited
   const [confirmDelete,setConfirmDelete]= useState(null);       // session pending delete
-  const [savingEdit,   setSavingEdit]   = useState(false);
-  const [editError,    setEditError]    = useState(null);
   const [deletingId,   setDeletingId]   = useState(null);
+
+  const navigate = useNavigate();
 
   useEffect(() => { dispatch(fetchSessions()); }, [dispatch]);
   useEffect(() => { dispatch(fetchBatches());  }, [dispatch]);
@@ -1359,14 +1222,6 @@ const TrainerSessions = () => {
   }, []);
 
   // Update — PUT, then refresh the list (avoids assuming slice state shape).
-  const handleSaveEdit = useCallback(async (id, changes) => {
-    setSavingEdit(true); setEditError(null);
-    const result = await dispatch(updateSession({ id, changes }));
-    setSavingEdit(false);
-    if (updateSession.fulfilled.match(result)) { setEditSession(null); reload(); }
-    else { setEditError(result.payload || 'Failed to update session'); }
-  }, [dispatch, reload]);
-
   // Delete — DELETE, then refresh.
   const handleConfirmDelete = useCallback(async () => {
     if (!confirmDelete) return;
@@ -1445,10 +1300,12 @@ const TrainerSessions = () => {
           </div>
         )}
 
-        {/* ALL SESSIONS — searchable, paginated, edit/delete */}
+        {/* ALL SESSIONS — searchable, paginated; View/Edit/New open a routed page */}
         <SessionTable
           sessions={sessions}
-          onEdit={setEditSession}
+          onView={(s) => navigate(`${s._id}`)}
+          onEdit={(s) => navigate(`${s._id}/edit`)}
+          onCreate={() => navigate('new')}
           onDelete={setConfirmDelete}
           deletingId={deletingId}
         />
@@ -1461,18 +1318,6 @@ const TrainerSessions = () => {
           sessions={sessions}
           onClose={() => setModalDay(null)}
           onScheduleHere={() => setFormDate(toDateInput(modalDay))}
-        />
-      )}
-
-      {/* EDIT SESSION */}
-      {editSession && (
-        <EditSessionModal
-          session={editSession}
-          batches={batches}
-          saving={savingEdit}
-          error={editError}
-          onSave={handleSaveEdit}
-          onClose={() => { setEditSession(null); setEditError(null); }}
         />
       )}
 

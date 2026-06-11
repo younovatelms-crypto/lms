@@ -31,6 +31,7 @@ const batchRoutes       = require('./routes/batchRoutes');
 const userRoutes        = require('./routes/userRoutes');
 const courseRoutes        = require('./routes/courseRoutes');
 const subjectContentRoutes = require('./routes/subjectContentRoutes');
+const subscriptionRoutes = require('./routes/courseSubscriptionRoutes');
 
 
 const app    = express();
@@ -103,6 +104,8 @@ app.use('/api/batches',    batchRoutes);
 app.use('/api/users',      userRoutes);
 app.use('/api/courses',    courseRoutes);
 app.use('/api/courses_subject', subjectContentRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
+
 
 // ── 404 catch-all ────────────────────────────────────────────────────────────
 app.use((req, res) =>
