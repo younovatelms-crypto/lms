@@ -34,6 +34,16 @@ const userSchema = new mongoose.Schema({
   profilePicture: { type: String, default: '' },
   linkedIn:       { type: String, default: '' },
   github:         { type: String, default: '' },
+  // NEW FIELDS
+  gender:         { type: String, default: '' },
+  dateOfBirth:    { type: Date },
+  designation:    { type: String, default: '' },
+  department:     { type: String, default: '' },
+  address:        { type: String, default: '' },
+  city:           { type: String, default: '' },
+  state:          { type: String, default: '' },
+  country:        { type: String, default: '' },
+  pincode:        { type: String, default: '' },
 
   // ── Trainee-specific ──────────────────────────────────────────────────────
   batchId:            { type: mongoose.Schema.Types.ObjectId, ref: 'Batch', default: null },
@@ -48,10 +58,31 @@ const userSchema = new mongoose.Schema({
   companyName:        { type: String, default: '' },
   ctc:                { type: String, default: '' },
   placementUpdatedAt: { type: Date },
+  // Education
+  collegeName:    { type: String, default: '' },
+  degree:         { type: String, default: '' },
+  branch:         { type: String, default: '' },
+  graduationYear: { type: Number },
+  // Career
+  portfolioUrl:   { type: String, default: '' },
+  resumeUrl:      { type: String, default: '' },
   hrEvaluation:       hrEvaluationSchema,
 
   // ── Trainer-specific ──────────────────────────────────────────────────────
   expertise: [{ type: String }],
+  designation:      { type: String, default: '' },
+  experience:       { type: Number, default: 0 }, // years
+  specialization:   { type: String, default: '' },
+  certifications:   [{ type: String }],
+  currentCompany:   { type: String, default: '' },
+  portfolioUrl:     { type: String, default: '' },
+
+  // HR-specific
+  designation:     { type: String, default: '' },
+  department:      { type: String, default: '' },
+  employeeId:      { type: String, default: '' },
+  experience:      { type: Number, default: 0 },
+  specialization:  { type: String, default: '' },
 
   // ── Auth fields (select: false — never leaked) ────────────────────────────
   sessionToken:          { type: String, select: false },

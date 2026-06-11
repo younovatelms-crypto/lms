@@ -1,0 +1,26 @@
+/* Input styling for profile photo (matches LoginPage look) */
+
+.yp-upload-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+}
+
+.yp-file-input {
+  width: 100%;
+  padding: 12px 12px;
+  background: #ffffff;
+  border: 1px solid #d7e0eb;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #050a16;
+  font-family: inherit;
+  outline: none;
+}
+
+.yp-file-input:focus {
+  border-color: #7ba8d6;
+  box-shadow: 0 0 0 3px rgba(63, 125, 160, 0.16);
+}
+

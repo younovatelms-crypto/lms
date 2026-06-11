@@ -209,6 +209,32 @@ export const updateProfile = createAsyncThunk(
   }
 );
 
+// PUT /api/auth/profile-photo (multipart)
+export const uploadProfilePhoto = createAsyncThunk(
+  'auth/uploadProfilePhoto',
+  async (file, { getState, rejectWithValue }) => {
+    try {
+      const token = getState().auth.token;
+      const formData = new FormData();
+      formData.append('profilePhoto', file);
+
+      const { data } = await axios.put(`${API}/api/auth/profile-photo`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      return data.user;
+    } catch (err) {
+      return rejectWithValue(
+        err.response?.data?.message || 'Failed to upload profile photo.'
+      );
+    }
+  }
+);
+
+
 // =============================================================================
 // INITIAL STATE
 // =============================================================================
@@ -378,9 +404,24 @@ const authSlice = createSlice({
       .addCase(updateProfile.rejected, (state, action) => {
         state.status = 'idle';
         state.error  = action.payload;
+      })
+      // ── uploadProfilePhoto ────────────────────────────────────────────────
+      .addCase(uploadProfilePhoto.pending, (state) => {
+        state.status = 'loading';
+        state.error  = null;
+      })
+      .addCase(uploadProfilePhoto.fulfilled, (state, action) => {
+        state.status = 'idle';
+        // state.user   = { ...state.user, ...action.payload };
+        state.user   = action.payload; // ← not spread, full replace
+      })
+      .addCase(uploadProfilePhoto.rejected, (state, action) => {
+        state.status = 'idle';
+        state.error  = action.payload;
       });
   },
 });
+
 
 // =============================================================================
 // SELECTORS
