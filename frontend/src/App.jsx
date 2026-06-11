@@ -42,15 +42,18 @@ import CourseTopic from './pages/trainee/CourseTopic';
 
 
 
+import WhatsAppButton from "./pages/WhatsAppButton";
 
 
 
 
 import TrainerDashboard  from './pages/trainer/Dashboard';
-
 import TrainerSessions   from './pages/trainer/Sessions';
 import TrainerAttendance from './pages/trainer/Attendance';
 import TrainerAssignments from './pages/trainer/Assignments';
+import SessionDetail from './pages/trainer/SessionDetail';
+
+
 
 import TraineeDashboard  from './pages/trainee/Dashboard';
 import TraineeSessions   from './pages/trainee/Sessions';
@@ -89,6 +92,7 @@ function RoleRedirect() {
 function App() {
   const dispatch        = useAppDispatch();
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
+  
 
   // Re-hydrate user on page reload
   useEffect(() => {
@@ -103,7 +107,7 @@ function App() {
         <Route path="/register"        element={<RegisterPage />} />
         <Route path="/forgot_password" element={<ForgotPasswordPage />} />
         <Route path="/"      element={<RoleRedirect />} />
-
+        
         {/* Admin */}
         <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
           <Route path="/admin" element={<AdminLayout />}>
@@ -139,6 +143,14 @@ function App() {
             <Route path="sessions"    element={<TrainerSessions />} />
             <Route path="attendance"  element={<TrainerAttendance />} />
             <Route path="assignments" element={<TrainerAssignments />} />
+
+
+               
+            <Route path="sessions/new"      element={<SessionDetail mode="create" />} />
+            <Route path="sessions/:id"      element={<SessionDetail mode="view" />} />
+            <Route path="sessions/:id/edit" element={<SessionDetail mode="edit" />} />
+
+
             <Route path="profile" element={<Profile />} />
             <Route index element={<Navigate to="dashboard" replace />} />
           </Route>
@@ -179,7 +191,13 @@ function App() {
         <Route path="*" element={<div style={{ padding: 40, fontSize: 24 }}>404 — Page Not Found</div>} />
       </Routes>
 
+
+      {isAuthenticated && <WhatsAppButton />}
       <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+
+
+       
+
     </BrowserRouter>
   );
 }

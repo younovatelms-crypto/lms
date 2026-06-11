@@ -47,15 +47,46 @@ const fmtDate = (iso) =>
 
 const scoreCol = (n) => n >= 75 ? '#16a34a' : n >= 55 ? '#d97706' : '#dc2626';
 
-// Derive batch list from sessions, merging in batchStats from dashboard
-const buildBatches = (sessions = [], batchStats = {}) => {
+// A session is "past" (read-only) if its start time is before now, or it's completed.
+const isPastSession = (s, isLive = false) => {
+  if (isLive || s.status === 'live' || s.status === 'ongoing') return false;
+  if (s.status === 'completed' || s.status === 'cancelled' || s.status === 'ended') return true;
+  const t = s.scheduledAt || s.date || s.startTime;
+  if (!t) return false;
+  const ms = new Date(t).getTime();
+  return !isNaN(ms) && ms < Date.now();
+};
+
+const clampPct = (n) => Math.min(100, Math.max(0, Math.round(Number(n) || 0)));
+
+// Build the batch list from BOTH the trainer's assigned batches (so every batch
+// shows, even with no sessions yet) and any sessions (for live counts).
+const buildBatches = (explicitBatches = [], sessions = [], batchStats = {}) => {
   const map = {};
+  const keyOf = (b) => b._id || b.id || b.batchId || b.code || b.name;
+
+  // 1) Seed from explicitly-assigned batches.
+  explicitBatches.forEach((b) => {
+    const id   = keyOf(b) || 'unknown';
+    const name = b.name || b.batchName || b.code || 'Batch';
+    map[id] = {
+      sessions: [],
+      ...(batchStats[id] || {}),
+      ...b,
+      id,
+      name,
+      phase: b.phase || b.currentModule || b.module || (batchStats[id] || {}).phase,
+    };
+  });
+
+  // 2) Fold in sessions (adds counts + any batch only seen via a session).
   sessions.forEach((s) => {
-    const id   = s.batchId?._id  || 'unknown';
-    const name = s.batchId?.name || 'Unknown Batch';
+    const id   = s.batchId?._id || s.batchId || 'unknown';
+    const name = s.batchId?.name || map[id]?.name || 'Unknown Batch';
     if (!map[id]) map[id] = { id, name, sessions: [], ...(batchStats[id] || {}) };
     map[id].sessions.push(s);
   });
+
   return Object.values(map);
 };
 
@@ -83,8 +114,22 @@ const CSS = `
     border-color: #6366f1 !important;
     box-shadow: 0 0 0 3px rgba(99,102,241,.15) !important;
   }
+
+  /* Tabs never wrap; scroll sideways if cramped */
+  .td-tabs { -ms-overflow-style: none; scrollbar-width: none; }
+  .td-tabs::-webkit-scrollbar { display: none; }
+  .td-tabs button { flex: 0 0 auto; white-space: nowrap; }
+
   @media (max-width: 1024px) { .td-g3 { grid-template-columns: 1fr 1fr !important; } }
   @media (max-width:  680px) { .td-g3 { grid-template-columns: 1fr       !important; } }
+
+  /* Mobile polish */
+  @media (max-width: 768px) {
+    .td-wrap  { padding: 20px 14px !important; }
+    .td-h1    { font-size: 1.35rem !important; }
+    .td-tabs  { overflow-x: auto; }
+    .td-modal { padding: 20px 18px !important; }
+  }
 `;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -139,18 +184,18 @@ const FieldLbl = ({ children }) => (
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // BATCH CARD
-// "YBLP-B07  [M6 Residency]"
-// "18 trainees · Avg 82 · Mentor active"
-// [coloured progress bar]
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const BatchCard = ({ batch, idx }) => {
-  const c   = COLORS[idx % COLORS.length];
-  const l   = LIGHTS[idx % LIGHTS.length];
-  const pct = Math.min(100, Math.round((batch.sessions.length / 12) * 100));
+  const c = COLORS[idx % COLORS.length];
+  const l = LIGHTS[idx % LIGHTS.length];
+  const pct = batch.progress != null || batch.completion != null
+    ? clampPct(batch.progress ?? batch.completion)
+    : Math.min(100, Math.round((batch.sessions.length / 12) * 100));
 
   const meta = [];
-  if (batch.totalStudents)    meta.push(`${batch.totalStudents} trainees`);
+  if (batch.totalStudents != null) meta.push(`${batch.totalStudents} trainees`);
+  else if (batch.studentCount != null) meta.push(`${batch.studentCount} trainees`);
   if (batch.avgScore != null) meta.push(`Avg ${batch.avgScore}`);
   meta.push(batch.activeCount != null ? `${batch.activeCount} active` : 'Mentor active');
 
@@ -160,7 +205,7 @@ const BatchCard = ({ batch, idx }) => {
       borderRadius: 10, padding: '14px 16px', marginBottom: 10,
       background: '#fff', cursor: 'pointer', transition: 'box-shadow .15s',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5, flexWrap: 'wrap' }}>
         <span style={{ fontWeight: 700, fontSize: '0.93rem', color: '#111827' }}>{batch.name}</span>
         {batch.phase && <Pill bg={l} color={c}>{batch.phase}</Pill>}
       </div>
@@ -175,10 +220,7 @@ const BatchCard = ({ batch, idx }) => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SESSION CARD
-// "M4-LMS-03 — Branch Ops"
-// "10:00 AM · YBLP-B08 · S2 Practical"
-// [Start Session] | [Upcoming] | [Join Live]  +  [Attendance]
+// SESSION CARD  (past sessions render read-only)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const SessionCard = ({ session, isLive }) => {
@@ -189,8 +231,9 @@ const SessionCard = ({ session, isLive }) => {
   const att        = allAtt[session._id];
   const attLoading = allAttSt[session._id] === 'loading';
 
-  // API response: { records: [{ trainee:{name,email}, status, markedAt }] }
-  const records = att?.records || [];
+  const records  = att?.records || att?.data?.records || [];
+  const past     = isPastSession(session, isLive);            // ← read-only when in the past
+  const completed = session.status === 'completed';
 
   const toggleAttendance = () => {
     if (!open && !att) dispatch(fetchSessionAttendance(session._id));
@@ -206,16 +249,18 @@ const SessionCard = ({ session, isLive }) => {
   return (
     <div className="td-card" style={{
       border: `1px solid ${isLive ? '#fca5a5' : '#e5e7eb'}`,
-      background: isLive ? '#fef2f2' : '#fff',
+      background: isLive ? '#fef2f2' : past ? '#f9fafb' : '#fff',
       borderRadius: 10, padding: '14px 16px', marginBottom: 10,
-      transition: 'box-shadow .15s',
+      transition: 'box-shadow .15s', opacity: past ? 0.92 : 1,
     }}>
-      {/* Title */}
-      <div style={{ fontWeight: 600, fontSize: '0.93rem', color: '#111827', marginBottom: 4 }}>
-        {session.title || 'Untitled Session'}
+      {/* Title + read-only tag */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+        <span style={{ fontWeight: 600, fontSize: '0.93rem', color: '#111827' }}>
+          {session.title || 'Untitled Session'}
+        </span>
+        {past && <Pill bg="#f1f5f9" color="#64748b">🔒 Read-only</Pill>}
       </div>
 
-      {/* "10:00 AM · YBLP-B08 · S2 Practical" */}
       <div style={{ fontSize: '0.78rem', color: '#6b7280', marginBottom: 10 }}>{meta}</div>
 
       {/* Action buttons */}
@@ -227,24 +272,27 @@ const SessionCard = ({ session, isLive }) => {
             <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#fff', animation: 'pulse 1s infinite' }} />
             Join Live
           </button>
+        ) : past ? (
+          /* Past → read-only, no start/join */
+          <span style={{ background: '#f1f5f9', color: '#64748b', border: '1px solid #e5e7eb', padding: '6px 14px', borderRadius: 7, fontSize: '0.78rem', fontWeight: 600 }}>
+            {completed ? 'Completed' : 'Ended'}
+          </span>
         ) : session.status === 'scheduled' ? (
-          /* Dark "Start Session" — matches screenshot */
           <button style={{ background: '#1e293b', color: '#fff', border: 'none', padding: '7px 18px', borderRadius: 7, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}>
             Start Session
           </button>
         ) : (
-          /* Outlined "Upcoming" — matches screenshot */
           <button style={{ background: '#fff', color: '#6b7280', border: '1px solid #e5e7eb', padding: '6px 14px', borderRadius: 7, fontSize: '0.78rem', fontWeight: 500, cursor: 'default' }}>
             Upcoming
           </button>
         )}
 
-        {/* Attendance toggle — GET /api/trainer/attendance/session/:sessionId */}
+        {/* Attendance toggle (view-only for past sessions, still allowed) */}
         <button
           onClick={toggleAttendance}
           style={{ background: '#fff', color: '#6366f1', border: '1px solid #e0e7ff', padding: '6px 12px', borderRadius: 7, fontSize: '0.73rem', fontWeight: 600, cursor: 'pointer' }}
         >
-          {open ? 'Hide' : 'Attendance'}
+          {open ? 'Hide' : (past ? 'View Attendance' : 'Attendance')}
         </button>
       </div>
 
@@ -280,8 +328,6 @@ const SessionCard = ({ session, isLive }) => {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // GRADING MODAL
-// PUT /api/trainer/assignments/:id/grade/:submissionId
-// Body: { grade, feedback, allowResubmit }
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const GradingModal = () => {
@@ -313,15 +359,13 @@ const GradingModal = () => {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 480, padding: '26px 26px 22px', boxShadow: '0 20px 60px rgba(0,0,0,.18)', maxHeight: '90vh', overflowY: 'auto' }}>
+      <div className="td-modal" style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 480, padding: '26px 26px 22px', boxShadow: '0 20px 60px rgba(0,0,0,.18)', maxHeight: '90vh', overflowY: 'auto' }}>
 
-        {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
           <span style={{ fontWeight: 700, fontSize: '1rem', color: '#111827' }}>Grade Submission</span>
           <button onClick={() => dispatch(closeGradingModal())} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: '#9ca3af', lineHeight: 1, padding: 4 }}>✕</button>
         </div>
 
-        {/* Assignment info */}
         <div style={{ background: '#f9fafb', borderRadius: 8, padding: '10px 14px', marginBottom: 18 }}>
           <div style={{ fontWeight: 600, fontSize: '0.88rem', color: '#111827' }}>{assignment.title}</div>
           <div style={{ fontSize: '0.73rem', color: '#6b7280', marginTop: 3 }}>
@@ -333,7 +377,6 @@ const GradingModal = () => {
           <Empty icon="📭" msg="No submissions yet" />
         ) : (
           <>
-            {/* Pick submission */}
             <FieldLbl>Select Submission</FieldLbl>
             <div style={{ marginBottom: 14 }}>
               {subs.map((sub) => (
@@ -364,7 +407,6 @@ const GradingModal = () => {
               ))}
             </div>
 
-            {/* Grade */}
             <FieldLbl>Grade (0 – 100)</FieldLbl>
             <input
               type="number" min="0" max="100"
@@ -373,7 +415,6 @@ const GradingModal = () => {
               style={{ width: '100%', border: '1.5px solid #e5e7eb', borderRadius: 8, padding: '9px 12px', fontSize: '0.92rem', fontWeight: 700, color: '#111827', marginBottom: 14, fontFamily: 'inherit' }}
             />
 
-            {/* Feedback */}
             <FieldLbl>
               Feedback{' '}
               <span style={{ fontWeight: 400, textTransform: 'none', color: '#9ca3af' }}>(optional)</span>
@@ -385,7 +426,6 @@ const GradingModal = () => {
               style={{ width: '100%', border: '1.5px solid #e5e7eb', borderRadius: 8, padding: '9px 12px', fontSize: '0.82rem', color: '#374151', resize: 'vertical', marginBottom: 12, fontFamily: 'inherit' }}
             />
 
-            {/* Allow resubmit */}
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem', color: '#374151', marginBottom: 18, cursor: 'pointer', userSelect: 'none' }}>
               <input
                 type="checkbox" checked={allowResubmit}
@@ -395,14 +435,12 @@ const GradingModal = () => {
               Allow resubmission
             </label>
 
-            {/* API error */}
             {gradError && (
               <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '9px 12px', fontSize: '0.76rem', color: '#b91c1c', marginBottom: 14 }}>
                 ⚠️ {gradError}
               </div>
             )}
 
-            {/* Submit */}
             <button
               onClick={handleSubmit} disabled={!canSubmit}
               className={canSubmit ? 'td-btn' : ''}
@@ -425,15 +463,14 @@ const GradingModal = () => {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LEADERBOARD
-// # | TRAINEE | SCORE table + yellow at-risk alerts
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const Leaderboard = ({ students }) => {
   const STATIC = [
-    { rank: 1, name: 'Kavya R.',   score: 88, attendance: 92 },
-    { rank: 2, name: 'Neha S.',    score: 84, attendance: 88 },
-    { rank: 3, name: 'Ritu M.',    score: 79, attendance: 85 },
-    { rank: 4, name: 'Ajay P.',    score: 65, attendance: 78 },
+    { rank: 1, name: 'Kavya R.',  score: 88, attendance: 92 },
+    { rank: 2, name: 'Neha S.',   score: 84, attendance: 88 },
+    { rank: 3, name: 'Ritu M.',   score: 79, attendance: 85 },
+    { rank: 4, name: 'Ajay P.',   score: 65, attendance: 78 },
     { rank: 5, name: 'Dinesh K.', score: 52, attendance: 74 },
   ];
 
@@ -477,7 +514,6 @@ const Leaderboard = ({ students }) => {
         </tbody>
       </table>
 
-      {/* Yellow at-risk box — matches screenshot exactly */}
       {atRisk.map(r => (
         <div key={r.rank} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: '#fefce8', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 12px', marginTop: 12 }}>
           <span style={{ color: '#d97706', fontSize: '0.88rem', flexShrink: 0, lineHeight: 1.5 }}>⚠</span>
@@ -494,31 +530,43 @@ const Leaderboard = ({ students }) => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// OVERVIEW TAB  (3-col layout matching screenshot)
+// OVERVIEW TAB
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const OverviewTab = ({ dashboard, students }) => {
-  const dispatch = useDispatch();
+  const dispatch        = useDispatch();
+  const trainerSessions = useSelector(selectTrainerSessions);
 
-  // API: { upcomingSessions[], liveSessions[], pendingGrades, totalStudents, batchStats:{} }
+  // Pull the FULL sessions list so batches without a session today still appear.
+  useEffect(() => { dispatch(fetchTrainerSessions()); }, [dispatch]);
+
   const upcoming      = dashboard?.upcomingSessions || [];
   const live          = dashboard?.liveSessions     || [];
   const allSessions   = [...live, ...upcoming];
   const pendingGrades = dashboard?.pendingGrades    ?? 0;
-  const totalStudents = dashboard?.totalStudents    ?? 0;
   const batchStats    = dashboard?.batchStats       || {};
 
-  const batches    = buildBatches(allSessions, batchStats);
+  // Every batch assigned to the trainer (several backend shapes supported).
+  const explicitBatches = [
+    dashboard?.batches,
+    dashboard?.assignedBatches,
+    dashboard?.myBatches,
+    dashboard?.trainer?.batches,
+  ].find(Array.isArray) || [];
+
+  // Prefer the full sessions list for counts; fall back to today's.
+  const sessionsForBatches = trainerSessions.length ? trainerSessions : allSessions;
+  const batches    = buildBatches(explicitBatches, sessionsForBatches, batchStats);
   const firstBatch = batches[0]?.name || dashboard?.batchName || 'Batch';
 
   return (
     <div className="td-g3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 28, alignItems: 'start' }}>
 
-      {/* ── COL 1: My Batches ── */}
+      {/* ── COL 1: My Batches (ALL assigned) ── */}
       <div>
-        <H2>My Batches</H2>
+        <H2>My Batches {batches.length > 0 && <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#9ca3af' }}>({batches.length})</span>}</H2>
         {batches.length === 0
-          ? <Empty icon="📦" msg="No batches yet" />
+          ? <Empty icon="📦" msg="No batches assigned yet" />
           : batches.map((b, i) => <BatchCard key={b.id} batch={b} idx={i} />)
         }
       </div>
@@ -533,7 +581,6 @@ const OverviewTab = ({ dashboard, students }) => {
           ))
         }
 
-        {/* Grading Queue — "Grading Queue  [5]"  dashed box */}
         <div style={{ marginTop: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <H2>Grading Queue</H2>
@@ -567,7 +614,7 @@ const OverviewTab = ({ dashboard, students }) => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SESSIONS TAB  — GET /api/trainer/sessions
+// SESSIONS TAB
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const SessionsTab = () => {
@@ -580,21 +627,23 @@ const SessionsTab = () => {
   if (status === 'loading') return <Spinner />;
   if (!sessions.length)     return <Empty icon="📅" msg="No sessions found" />;
 
-  const live  = sessions.filter(s => s.status === 'live');
-  const sched = sessions.filter(s => s.status === 'scheduled' || s.status === 'upcoming');
-  const done  = sessions.filter(s => s.status === 'completed');
+  const live = sessions.filter(s => s.status === 'live' || s.status === 'ongoing');
+  // Upcoming = scheduled AND not in the past.
+  const upcoming = sessions.filter(s => (s.status === 'scheduled' || s.status === 'upcoming') && !isPastSession(s));
+  // Past = completed/cancelled OR scheduled-but-overdue (rendered read-only).
+  const pastList = sessions.filter(s => !live.includes(s) && !upcoming.includes(s));
 
   return (
     <div>
-      {live.length  > 0 && <><GrpLbl>🔴 Live Now</GrpLbl> {live.map(s  => <SessionCard key={s._id} session={s} isLive />)}</>}
-      {sched.length > 0 && <><GrpLbl>Scheduled</GrpLbl>   {sched.map(s => <SessionCard key={s._id} session={s} isLive={false} />)}</>}
-      {done.length  > 0 && <><GrpLbl>Completed</GrpLbl>   {done.map(s  => <SessionCard key={s._id} session={s} isLive={false} />)}</>}
+      {live.length     > 0 && <><GrpLbl>🔴 Live Now</GrpLbl> {live.map(s     => <SessionCard key={s._id} session={s} isLive />)}</>}
+      {upcoming.length > 0 && <><GrpLbl>Upcoming</GrpLbl>     {upcoming.map(s => <SessionCard key={s._id} session={s} isLive={false} />)}</>}
+      {pastList.length > 0 && <><GrpLbl>Past · Read-only</GrpLbl> {pastList.map(s => <SessionCard key={s._id} session={s} isLive={false} />)}</>}
     </div>
   );
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ASSIGNMENTS TAB  — GET /api/trainer/assignments
+// ASSIGNMENTS TAB
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const AssignmentsTab = () => {
@@ -613,7 +662,7 @@ const AssignmentsTab = () => {
         const pending = (a.submissions || []).filter(s => s.grade == null).length;
         return (
           <div key={a._id} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 16px', background: '#fff' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
               <div>
                 <div style={{ fontWeight: 600, fontSize: '0.92rem', color: '#111827', marginBottom: 3 }}>{a.title}</div>
                 <div style={{ fontSize: '0.76rem', color: '#6b7280' }}>
@@ -622,7 +671,7 @@ const AssignmentsTab = () => {
               </div>
               {pending > 0 && <Pill bg="#fefce8" color="#d97706">{pending} pending</Pill>}
             </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <button
                 onClick={() => dispatch(openGradingModal(a))}
                 className="td-btn"
@@ -642,7 +691,7 @@ const AssignmentsTab = () => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// STUDENTS TAB  — GET /api/trainer/students
+// STUDENTS TAB  — full trainee list
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const StudentsTab = () => {
@@ -662,13 +711,22 @@ const StudentsTab = () => {
 
   return (
     <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
+        <H2>All Trainees <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#9ca3af' }}>({students.length})</span></H2>
+        {q && <span style={{ fontSize: '0.76rem', color: '#9ca3af' }}>{list.length} match{list.length === 1 ? '' : 'es'}</span>}
+      </div>
+
       <input
         value={q} onChange={e => setQ(e.target.value)}
         placeholder="Search trainees by name or email…"
         style={{ width: '100%', border: '1.5px solid #e5e7eb', borderRadius: 8, padding: '9px 14px', fontSize: '0.85rem', color: '#111827', marginBottom: 16, fontFamily: 'inherit' }}
       />
 
-      {list.length === 0 ? <Empty icon="🎓" msg="No trainees found" /> : (
+      {students.length === 0 ? (
+        <Empty icon="🎓" msg="No trainees found" />
+      ) : list.length === 0 ? (
+        <Empty icon="🔍" msg="No trainees match your search" />
+      ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 10 }}>
           {list.map((st, i) => {
             const score = st.averageScore ?? st.score ?? null;
@@ -676,7 +734,6 @@ const StudentsTab = () => {
             const l = LIGHTS[i % LIGHTS.length];
             return (
               <div key={st._id || i} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, background: '#fff' }}>
-                {/* Avatar + name */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
                   <div style={{ width: 36, height: 36, borderRadius: '50%', background: c, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.9rem', color: '#fff', flexShrink: 0 }}>
                     {(st.name || 'S')[0].toUpperCase()}
@@ -686,7 +743,6 @@ const StudentsTab = () => {
                     <div style={{ fontSize: '0.69rem', color: '#9ca3af', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{st.email}</div>
                   </div>
                 </div>
-                {/* Chips */}
                 <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                   {(st.batchId?.name || (typeof st.batchId === 'string' && st.batchId)) && (
                     <Pill bg={l} color={c}>{st.batchId?.name || st.batchId}</Pill>
@@ -731,7 +787,6 @@ const TABS = [
 const TrainerDashboard = () => {
   const dispatch  = useDispatch();
 
-  // Redux state
   const dashboard = useSelector(selectTrainerDashboard);
   const status    = useSelector(selectTrainerStatus);
   const error     = useSelector(selectTrainerError);
@@ -739,13 +794,9 @@ const TrainerDashboard = () => {
   const modal     = useSelector(selectGradingModal);
   const students  = useSelector(selectTrainerStudents);
 
-  // ── Fetch on mount ──────────────────────────────────────────────────────────
-  // GET /api/trainer/dashboard  →  KPIs, sessions, grading queue
   useEffect(() => { dispatch(fetchTrainerDashboard()); }, [dispatch]);
-  // GET /api/trainer/students   →  pre-load for leaderboard
   useEffect(() => { dispatch(fetchTrainerStudents());  }, [dispatch]);
 
-  // ── Trainer identity (multiple backend shapes supported) ───────────────────
   const trainerName    = dashboard?.trainer?.name       ?? dashboard?.trainerName    ?? 'Trainer';
   const trainerBatches = dashboard?.trainer?.batchGroup ?? dashboard?.batchGroupName ?? 'YBLP Batches';
   const trainerRole    = dashboard?.trainer?.role       ?? dashboard?.role           ?? 'isMentor';
@@ -763,13 +814,11 @@ const TrainerDashboard = () => {
     <div style={{ minHeight: '100vh', background: '#f9fafb', fontFamily: "'Inter', system-ui, sans-serif", color: '#111827' }}>
       <style>{CSS}</style>
 
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 24px' }}>
+      <div className="td-wrap" style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 24px' }}>
 
-        {/* ── PAGE HEADER ─────────────────────────────────────────────────── */}
-        {/* "Trainer Dashboard"                                                 */}
-        {/* "Rahul Kumar · YBLP Batches · isMentor:  ✓ Active"                */}
+        {/* ── PAGE HEADER ── */}
         <div style={{ marginBottom: 28, animation: 'fadeUp .35s ease' }}>
-          <h1 style={{ fontSize: '1.65rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.5px', marginBottom: 7 }}>
+          <h1 className="td-h1" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.5px', marginBottom: 7 }}>
             Trainer Dashboard
           </h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -789,27 +838,16 @@ const TrainerDashboard = () => {
           </div>
         </div>
 
-        {/* ── ERROR BANNER (only for non-auth errors) ─────────────────────── */}
+        {/* ── ERROR BANNER ── */}
         {error && status === 'failed' && (
           <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '11px 14px', marginBottom: 20, fontSize: '0.79rem', color: '#b91c1c', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
             <span style={{ flexShrink: 0 }}>⚠️</span>
-            <div>
-              <strong>API Error:</strong> {error}
-              {error.toLowerCase().includes('token') && (
-                <span>
-                  {' '}— Check your login: open browser console and run{' '}
-                  <code style={{ background: '#ffe4e6', padding: '1px 5px', borderRadius: 4 }}>
-                    Object.keys(localStorage)
-                  </code>{' '}
-                  to find your token key, then update <code style={{ background: '#ffe4e6', padding: '1px 5px', borderRadius: 4 }}>getToken()</code> in trainerSlice.js.
-                </span>
-              )}
-            </div>
+            <div><strong>API Error:</strong> {error}</div>
           </div>
         )}
 
-        {/* ── UNDERLINE TABS ──────────────────────────────────────────────── */}
-        <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid #e5e7eb', marginBottom: 28 }}>
+        {/* ── UNDERLINE TABS ── */}
+        <div className="td-tabs" style={{ display: 'flex', gap: 2, borderBottom: '1px solid #e5e7eb', marginBottom: 28 }}>
           {TABS.map(tab => {
             const active = activeTab === tab.id;
             return (
@@ -835,7 +873,7 @@ const TrainerDashboard = () => {
           })}
         </div>
 
-        {/* ── TAB CONTENT ─────────────────────────────────────────────────── */}
+        {/* ── TAB CONTENT ── */}
         {status === 'loading' && !dashboard ? (
           <Spinner />
         ) : (
@@ -845,7 +883,7 @@ const TrainerDashboard = () => {
         )}
       </div>
 
-      {/* ── GRADING MODAL ───────────────────────────────────────────────────── */}
+      {/* ── GRADING MODAL ── */}
       {modal && <GradingModal />}
     </div>
   );

@@ -20,6 +20,7 @@ export const fetchTrainerDashboard = createAsyncThunk(
         `${API}/api/trainer/dashboard`,
         authHeader(getState)
       );
+      console.log(data)
       return data;
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || err.message || 'Failed to load dashboard');
