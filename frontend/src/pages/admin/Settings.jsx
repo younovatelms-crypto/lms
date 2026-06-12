@@ -1,12 +1,20 @@
 // src/pages/admin/AdminSettings.jsx
-// LMS Admin Settings — tabbed, API-backed.
-//   GET  /api/admin/settings                  → loads all sections
-//   PUT  /api/admin/settings/:section         → saves one section
-//   PUT  /api/admin/account/password          → change admin password
-// Self-contained (axios + token from localStorage). Swap to your settings slice if preferred.
+// LMS Admin Settings — tabbed, Redux-backed.
 
 import React, { useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
+import { useAppDispatch, useAppSelector } from '../../app/hooks';
+import {
+  fetchSettings,
+  saveSettingsSection,
+  fetchRoles,
+  fetchUsersByRole,
+  resetUserPassword as resetPasswordThunk,
+  updateSettingsField,
+  selectSettings,
+  selectSettingsStatus,
+  selectRoles,
+  selectUsersByRole,
+} from '../../features/admin/adminSlice';
 import toast from 'react-hot-toast';
 
 // ─── Config ─────────────────────────────────────────────────────────────────
@@ -26,16 +34,7 @@ const readApiBase = () => {
   } catch (_) {}
   return undefined;
 };
-const API = readApiBase() || 'http://localhost:8080';
 const BRAND = '#3f7da0';
-
-const authHeaders = () => {
-  const token =
-    localStorage.getItem('token') ||
-    localStorage.getItem('accessToken') ||
-    localStorage.getItem('jwt');
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
 
 // ─── Defaults (also the shape the backend should return/accept) ───────────────
 const DEFAULTS = {
@@ -126,10 +125,32 @@ const Field = ({ label, hint, children }) => (
   </div>
 );
 
-const TextField = ({ label, hint, value, onChange, type = 'text', placeholder }) => (
+const TextField = ({ label, hint, value, onChange, type = 'text', placeholder, showToggle, onToggle }) => (
   <Field label={label} hint={hint}>
-    <input className="as-input" type={type} value={value ?? ''} placeholder={placeholder}
-      onChange={(e) => onChange(e.target.value)} style={inputSt} />
+    <div style={{ position: 'relative' }}>
+      <input className="as-input" type={type} value={value ?? ''} placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)} style={inputSt} />
+      {showToggle && (
+        <button
+          type="button"
+          onClick={onToggle}
+          style={{
+            position: 'absolute',
+            right: 10,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            fontSize: 14,
+            color: '#94a3b8',
+            padding: 4,
+          }}
+        >
+          {type === 'password' ? '👁️' : '👁️‍🗨️'}
+        </button>
+      )}
+    </div>
   </Field>
 );
 
@@ -195,88 +216,118 @@ const SectionShell = ({ title, desc, saving, onSave, dirty, children, saveLabel 
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function AdminSettings() {
-  const [tab, setTab]         = useState('general');
-  const [form, setForm]       = useState(DEFAULTS);
-  const [loaded, setLoaded]   = useState(DEFAULTS);  // last-saved snapshot (dirty check)
-  const [loading, setLoading] = useState(true);
-  const [loadErr, setLoadErr] = useState(null);
-  const [saving, setSaving]   = useState(null);      // section id currently saving
+  const dispatch = useAppDispatch();
+  const [tab, setTab] = useState('general');
+  const settings = useAppSelector(selectSettings);
+  const settingsStatus = useAppSelector(selectSettingsStatus);
+  const roles = useAppSelector(selectRoles);
+  const usersByRole = useAppSelector(selectUsersByRole);
+  const [saving, setSaving] = useState(null);
+  
+  // Account section
+  const [selectedRole, setSelectedRole] = useState('');
+  const [selectedUser, setSelectedUser] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [resetSaving, setResetSaving] = useState(false);
+  const [passwordErrors, setPasswordErrors] = useState({ newPassword: '', confirmPassword: '' });
+  
+  // Password visibility for integration fields
+  const [showPaymentKey, setShowPaymentKey] = useState(false);
+  const [showZoomSecret, setShowZoomSecret] = useState(false);
 
-  // Account / password change (separate endpoint)
-  const [pwd, setPwd]           = useState({ current: '', next: '', confirm: '' });
-  const [pwdSaving, setPwdSaving] = useState(false);
+  const form = settings || DEFAULTS;
 
-  // ── Load all settings ──
+  const setField = (section, key, value) => {
+    dispatch(updateSettingsField({ section, key, value }));
+  };
+
+  const dirty = (section) => {
+    return false; // Redux handles this
+  };
+
   useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const { data } = await axios.get(`${API}/api/admin/settings`, { headers: authHeaders() });
-        const payload = data?.settings || data?.data || data || {};
-        // Deep-merge each section over defaults so missing keys keep defaults.
-        const merged = Object.fromEntries(
-          Object.keys(DEFAULTS).map((k) => [k, { ...DEFAULTS[k], ...(payload[k] || {}) }])
-        );
-        if (alive) { setForm(merged); setLoaded(merged); }
-      } catch (e) {
-        if (alive) setLoadErr(e.response?.data?.message || e.message || 'Failed to load settings');
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-    return () => { alive = false; };
-  }, []);
+    dispatch(fetchSettings());
+  }, [dispatch]);
 
-  const setField = (section, key, value) =>
-    setForm((f) => ({ ...f, [section]: { ...f[section], [key]: value } }));
+  useEffect(() => {
+    if (tab === 'account') {
+      dispatch(fetchRoles());
+    }
+  }, [tab, dispatch]);
 
-  const dirty = (section) =>
-    JSON.stringify(form[section]) !== JSON.stringify(loaded[section]);
+  useEffect(() => {
+    if (selectedRole) {
+      dispatch(fetchUsersByRole(selectedRole));
+    }
+  }, [selectedRole, dispatch]);
 
   const saveSection = async (section) => {
     setSaving(section);
     try {
-      const { data } = await axios.put(
-        `${API}/api/admin/settings/${section}`,
-        form[section],
-        { headers: authHeaders() }
-      );
-      const saved = data?.settings?.[section] || data?.[section] || form[section];
-      const next = { ...form[section], ...saved };
-      setForm((f) => ({ ...f, [section]: next }));
-      setLoaded((l) => ({ ...l, [section]: next }));
+      await dispatch(saveSettingsSection({ section, data: form[section] })).unwrap();
       toast.success('Settings saved');
-    } catch (e) {
-      toast.error(e.response?.data?.message || e.message || 'Failed to save');
+    } catch (err) {
+      toast.error(err || 'Failed to save');
     } finally {
       setSaving(null);
     }
   };
 
-  const changePassword = async () => {
-    if (!pwd.current || !pwd.next) return toast.error('Fill in both password fields');
-    if (pwd.next.length < (form.security.passwordMinLength || 8))
-      return toast.error(`New password must be at least ${form.security.passwordMinLength || 8} characters`);
-    if (pwd.next !== pwd.confirm) return toast.error('Passwords do not match');
-    setPwdSaving(true);
+  const resetUserPassword = async () => {
+    setPasswordErrors({ newPassword: '', confirmPassword: '' });
+    
+    const errors = {};
+    if (!selectedRole) return toast.error('Please select a role');
+    if (!selectedUser) return toast.error('Please select a user');
+    
+    if (!newPassword) {
+      errors.newPassword = 'Password is required';
+    } else if (newPassword.length < 6) {
+      errors.newPassword = 'Password must be at least 6 characters';
+    } else if (!/[A-Z]/.test(newPassword)) {
+      errors.newPassword = 'Password must contain at least one uppercase letter';
+    } else if (!/[0-9]/.test(newPassword)) {
+      errors.newPassword = 'Password must contain at least one number';
+    }
+    
+    if (!confirmPassword) {
+      errors.confirmPassword = 'Please confirm password';
+    } else if (newPassword !== confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match';
+    }
+    
+    if (Object.keys(errors).length > 0) {
+      setPasswordErrors(errors);
+      toast.error('Please fix validation errors');
+      return;
+    }
+    
+    setResetSaving(true);
     try {
-      await axios.put(
-        `${API}/api/admin/account/password`,
-        { currentPassword: pwd.current, newPassword: pwd.next },
-        { headers: authHeaders() }
-      );
-      setPwd({ current: '', next: '', confirm: '' });
-      toast.success('Password updated');
-    } catch (e) {
-      toast.error(e.response?.data?.message || e.message || 'Failed to update password');
+      const result = await dispatch(resetPasswordThunk({ userId: selectedUser, newPassword })).unwrap();
+      setNewPassword('');
+      setConfirmPassword('');
+      setSelectedUser('');
+      setSelectedRole('');
+      setShowNewPassword(false);
+      setShowConfirmPassword(false);
+      setPasswordErrors({ newPassword: '', confirmPassword: '' });
+      toast.success(result.message || 'Password reset successfully');
+    } catch (err) {
+      toast.error(err || 'Failed to reset password');
     } finally {
-      setPwdSaving(false);
+      setResetSaving(false);
     }
   };
 
   const grid = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 };
 
   const body = useMemo(() => {
+    if (settingsStatus === 'loading') return <Spinner />;
+    if (!settings) return <Spinner />;
     if (tab === 'general') {
       const g = form.general;
       return (
@@ -346,9 +397,25 @@ export default function AdminSettings() {
           saving={saving === 'integrations'} dirty={dirty('integrations')} onSave={() => saveSection('integrations')}>
           <div className="as-grid" style={{ ...grid, marginBottom: 16 }}>
             <SelectField label="Payment gateway" value={i.paymentGateway} onChange={(v) => setField('integrations', 'paymentGateway', v)} options={PAY_GATEWAYS} />
-            <TextField label="Payment API key" type="password" value={i.paymentKey} onChange={(v) => setField('integrations', 'paymentKey', v)} placeholder="••••••••" />
+            <TextField 
+              label="Payment API key" 
+              type={showPaymentKey ? 'text' : 'password'} 
+              value={i.paymentKey} 
+              onChange={(v) => setField('integrations', 'paymentKey', v)} 
+              placeholder="••••••••" 
+              showToggle={true}
+              onToggle={() => setShowPaymentKey(!showPaymentKey)}
+            />
             <TextField label="Zoom API key" value={i.zoomApiKey} onChange={(v) => setField('integrations', 'zoomApiKey', v)} />
-            <TextField label="Zoom API secret" type="password" value={i.zoomApiSecret} onChange={(v) => setField('integrations', 'zoomApiSecret', v)} placeholder="••••••••" />
+            <TextField 
+              label="Zoom API secret" 
+              type={showZoomSecret ? 'text' : 'password'} 
+              value={i.zoomApiSecret} 
+              onChange={(v) => setField('integrations', 'zoomApiSecret', v)} 
+              placeholder="••••••••" 
+              showToggle={true}
+              onToggle={() => setShowZoomSecret(!showZoomSecret)}
+            />
             <TextField label="S3 bucket" value={i.s3Bucket} onChange={(v) => setField('integrations', 's3Bucket', v)} placeholder="my-lms-uploads" />
           </div>
           <ToggleField label="Enable Google SSO" hint="Allow sign-in with Google Workspace accounts." checked={i.googleSsoEnabled} onChange={(v) => setField('integrations', 'googleSsoEnabled', v)} />
@@ -373,27 +440,128 @@ export default function AdminSettings() {
       );
     }
 
-    // Account / password
+    // Account - Reset User Password
+    const handleUserSelectClick = () => {
+      if (!selectedRole) {
+        toast.error('Please select a role first');
+      }
+    };
+    
     return (
       <div style={{ animation: 'as-fade .2s ease' }}>
         <div style={{ marginBottom: 18 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#172033' }}>Account</h3>
-          <p style={{ margin: '5px 0 0', color: '#657691', fontSize: 12.5 }}>Change your admin password.</p>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#172033' }}>Reset User Password</h3>
+          <p style={{ margin: '5px 0 0', color: '#657691', fontSize: 12.5 }}>Select a role and user to reset their password.</p>
         </div>
-        <div style={{ display: 'grid', gap: 16, maxWidth: 420 }}>
-          <TextField label="Current password" type="password" value={pwd.current} onChange={(v) => setPwd((p) => ({ ...p, current: v }))} />
-          <TextField label="New password" type="password" value={pwd.next} onChange={(v) => setPwd((p) => ({ ...p, next: v }))} hint={`At least ${form.security.passwordMinLength || 8} characters.`} />
-          <TextField label="Confirm new password" type="password" value={pwd.confirm} onChange={(v) => setPwd((p) => ({ ...p, confirm: v }))} />
+        
+        <div style={{ display: 'grid', gap: 18 }}>
+          {/* Row 1: Role and User */}
+          <div className="as-grid" style={grid}>
+            <SelectField 
+              label="Select Role" 
+              value={selectedRole} 
+              onChange={(v) => { 
+                setSelectedRole(v); 
+                setSelectedUser(''); 
+                setNewPassword(''); 
+                setConfirmPassword(''); 
+                setPasswordErrors({ newPassword: '', confirmPassword: '' });
+                setShowNewPassword(false);
+                setShowConfirmPassword(false);
+              }} 
+              options={[
+                ['', 'Choose a role'], 
+                ...roles.map(r => [r, r.charAt(0).toUpperCase() + r.slice(1)])
+              ]}
+            />
+            <div onClick={handleUserSelectClick}>
+              <SelectField 
+                label="Select User" 
+                value={selectedUser} 
+                onChange={(v) => { 
+                  if (!selectedRole) return;
+                  setSelectedUser(v); 
+                  setNewPassword(''); 
+                  setConfirmPassword(''); 
+                  setPasswordErrors({ newPassword: '', confirmPassword: '' });
+                  setShowNewPassword(false);
+                  setShowConfirmPassword(false);
+                }}
+                options={[
+                  ['', users.length === 0 ? 'No users found' : 'Choose a user'], 
+                  ...(selectedRole ? usersByRole.map(u => [u._id, `${u.name} (${u.email})`]) : [])
+                ]}
+              />
+            </div>
+          </div>
+          
+          {/* Row 2: Password Fields */}
+          <div className="as-grid" style={grid}>
+            <div>
+              <TextField 
+                label="New Password" 
+                type={showNewPassword ? 'text' : 'password'} 
+                value={newPassword} 
+                onChange={(v) => {
+                  setNewPassword(v);
+                  if (passwordErrors.newPassword) setPasswordErrors(prev => ({ ...prev, newPassword: '' }));
+                }}
+                placeholder="Enter new password"
+                hint="Min 6 chars, 1 uppercase, 1 number"
+                showToggle={true}
+                onToggle={() => setShowNewPassword(!showNewPassword)}
+              />
+              {passwordErrors.newPassword && (
+                <div style={{ fontSize: 11.5, color: '#ef4444', marginTop: 5 }}>
+                  ⚠️ {passwordErrors.newPassword}
+                </div>
+              )}
+            </div>
+            <div>
+              <TextField 
+                label="Confirm Password" 
+                type={showConfirmPassword ? 'text' : 'password'} 
+                value={confirmPassword} 
+                onChange={(v) => {
+                  setConfirmPassword(v);
+                  if (passwordErrors.confirmPassword) setPasswordErrors(prev => ({ ...prev, confirmPassword: '' }));
+                }}
+                placeholder="Re-enter new password"
+                showToggle={true}
+                onToggle={() => setShowConfirmPassword(!showConfirmPassword)}
+              />
+              {passwordErrors.confirmPassword && (
+                <div style={{ fontSize: 11.5, color: '#ef4444', marginTop: 5 }}>
+                  ⚠️ {passwordErrors.confirmPassword}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
+        
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20, borderTop: '1px solid #eef3f8', paddingTop: 16 }}>
-          <button className="as-btn" type="button" onClick={changePassword} disabled={pwdSaving}
-            style={{ padding: '10px 22px', borderRadius: 10, border: 'none', background: BRAND, color: '#fff', fontWeight: 800, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
-            {pwdSaving ? 'Updating…' : 'Update password'}
+          <button 
+            className="as-btn" 
+            type="button" 
+            onClick={resetUserPassword} 
+            disabled={resetSaving || !selectedRole || !selectedUser || !newPassword || !confirmPassword}
+            style={{ 
+              padding: '10px 22px', 
+              borderRadius: 10, 
+              border: 'none', 
+              background: BRAND, 
+              color: '#fff', 
+              fontWeight: 800, 
+              fontSize: 13, 
+              cursor: 'pointer', 
+              fontFamily: 'inherit' 
+            }}>
+            {resetSaving ? 'Resetting…' : 'Reset Password'}
           </button>
         </div>
       </div>
     );
-  }, [tab, form, loaded, saving, pwd, pwdSaving]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab, form, saving, selectedRole, selectedUser, newPassword, confirmPassword, showNewPassword, showConfirmPassword, resetSaving, passwordErrors, usersByRole, roles, showPaymentKey, showZoomSecret, settings, settingsStatus]);
 
   return (
     <div className="as-wrap" style={{ padding: 28, fontFamily: 'Public Sans, system-ui, sans-serif' }}>
@@ -405,12 +573,6 @@ export default function AdminSettings() {
           Configure organisation, security, notifications, integrations, and feature toggles.
         </p>
       </div>
-
-      {loadErr && (
-        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '11px 14px', marginBottom: 16, fontSize: 13, color: '#b91c1c' }}>
-          ⚠️ {loadErr}
-        </div>
-      )}
 
       <div className="as-shell" style={{ display: 'flex', gap: 0, background: '#fff', borderRadius: 14, border: '1px solid #dbe3ed', overflow: 'hidden', boxShadow: '0 1px 2px rgba(23,32,51,.08), 0 12px 28px rgba(31,61,99,.05)' }}>
         {/* Tabs rail */}
@@ -435,7 +597,7 @@ export default function AdminSettings() {
 
         {/* Panel */}
         <div className="as-pad" style={{ flex: 1, padding: 24, minWidth: 0 }}>
-          {loading ? <Spinner /> : body}
+          {body}
         </div>
       </div>
     </div>

@@ -31,6 +31,10 @@ const Trainers = () => {
     dispatch(fetchBatches());
   }, [dispatch]);
 
+  useEffect(() => {
+    setPage((p) => Math.min(p, Math.max(1, Math.ceil((trainers.length || 0) / rowsPerPage))));
+  }, [trainers.length, rowsPerPage]);
+
   const handleTrainerSelect = (trainerId) => {
     setSelectedTrainers(prev => 
       prev.includes(trainerId) 
@@ -146,16 +150,10 @@ const Trainers = () => {
 
   const totalTrainers = trainers.length;
   const totalPages = Math.max(1, Math.ceil(totalTrainers / rowsPerPage));
-
   const safePage = Math.min(page, totalPages);
   const startIdx = (safePage - 1) * rowsPerPage;
   const endIdx = startIdx + rowsPerPage;
   const paginatedTrainers = trainers.slice(startIdx, endIdx);
-
-  useEffect(() => {
-    // Reset page if list size shrinks
-    setPage((p) => Math.min(p, Math.max(1, Math.ceil((trainers.length || 0) / rowsPerPage))));
-  }, [trainers.length, rowsPerPage]);
 
   if (status === 'failed') {
     return (

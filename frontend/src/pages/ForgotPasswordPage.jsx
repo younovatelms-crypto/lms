@@ -47,7 +47,12 @@ function getStrength(pw) {
 
 // ─── OTP Input Component ──────────────────────────────────────────────────────
 function OtpInput({ value, onChange }) {
-  const refs = Array.from({ length: OTP_LENGTH }, () => useRef(null));
+  const inputRefs = useRef([]);
+
+  // Initialize refs array
+  if (inputRefs.current.length !== OTP_LENGTH) {
+    inputRefs.current = Array.from({ length: OTP_LENGTH }, () => null);
+  }
 
   const handleChange = (idx, e) => {
     const digit = e.target.value.replace(/\D/g, '').slice(-1);
@@ -55,12 +60,12 @@ function OtpInput({ value, onChange }) {
     next[idx]   = digit;
     const joined = next.join('');
     onChange(joined);
-    if (digit && idx < OTP_LENGTH - 1) refs[idx + 1].current?.focus();
+    if (digit && idx < OTP_LENGTH - 1) inputRefs.current[idx + 1]?.focus();
   };
 
   const handleKeyDown = (idx, e) => {
     if (e.key === 'Backspace' && !value[idx] && idx > 0) {
-      refs[idx - 1].current?.focus();
+      inputRefs.current[idx - 1]?.focus();
     }
   };
 
@@ -68,7 +73,7 @@ function OtpInput({ value, onChange }) {
     e.preventDefault();
     const text = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LENGTH);
     onChange(text.padEnd(OTP_LENGTH, ''));
-    refs[Math.min(text.length, OTP_LENGTH - 1)].current?.focus();
+    inputRefs.current[Math.min(text.length, OTP_LENGTH - 1)]?.focus();
   };
 
   return (
@@ -76,7 +81,7 @@ function OtpInput({ value, onChange }) {
       {Array.from({ length: OTP_LENGTH }, (_, i) => (
         <input
           key={i}
-          ref={refs[i]}
+          ref={el => inputRefs.current[i] = el}
           type="text"
           inputMode="numeric"
           maxLength={1}

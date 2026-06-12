@@ -30,6 +30,10 @@ const Trainees = () => {
     dispatch(fetchBatches());
   }, [dispatch]);
 
+  useEffect(() => {
+    setPage((p) => Math.min(p, Math.max(1, Math.ceil((trainees.length || 0) / rowsPerPage))));
+  }, [trainees.length, rowsPerPage]);
+
   const handleTraineeSelect = (traineeId) => {
     setSelectedTrainees((prev) =>
       prev.includes(traineeId) ? prev.filter((id) => id !== traineeId) : [...prev, traineeId]
@@ -154,15 +158,11 @@ const Trainees = () => {
 
   const totalTrainees = trainees.length;
   const totalPages = Math.max(1, Math.ceil(totalTrainees / rowsPerPage));
-
+  
   const safePage = Math.min(page, totalPages);
   const startIdx = (safePage - 1) * rowsPerPage;
   const endIdx = startIdx + rowsPerPage;
   const paginatedTrainees = trainees.slice(startIdx, endIdx);
-
-  useEffect(() => {
-    setPage((p) => Math.min(p, Math.max(1, Math.ceil((trainees.length || 0) / rowsPerPage))));
-  }, [trainees.length, rowsPerPage]);
 
   if (status === 'failed') {
     return (
