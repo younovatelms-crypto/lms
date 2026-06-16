@@ -27,9 +27,56 @@ const Trainees = () => {
   const [assigning, setAssigning]                 = useState(false);
   const pickerRef = useRef(null);
 
+  // Lightweight toast
+  const [toast, setToast] = useState('');
+
   // Pagination
   const [page, setPage]               = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // HELPERS (plain functions — safe to define anywhere)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Set of batch-id strings a trainee currently belongs to.
+  // Handles batchIds being raw ids OR populated { _id } objects.
+  const currentBatchIdSet = (trainee) => {
+    const raw = trainee?.batchIds || [];
+    return new Set(raw.map((b) => String(b?._id || b)));
+  };
+
+  // [{ id, name }] for the batches a trainee is in (joined against the batches list).
+  const getTraineeBatches = (trainee) => {
+    const set = currentBatchIdSet(trainee);
+    return batches
+      .filter((b) => set.has(String(b._id)))
+      .map((b) => ({ id: String(b._id), name: b.name }));
+  };
+
+  const openBatchModal = (trainee) => {
+    setBatchModalTrainee(trainee);
+    setChosenBatchIds([]);
+    setPickerOpen(false);
+  };
+
+  const closeBatchModal = () => {
+    setBatchModalTrainee(null);
+    setChosenBatchIds([]);
+    setPickerOpen(false);
+  };
+
+  const toggleChosen = (id) => {
+    const key = String(id);
+    setChosenBatchIds((prev) =>
+      prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]
+    );
+  };
+
+  const showToast = (msg) => {
+    setToast(msg);
+    window.clearTimeout(showToast._t);
+    showToast._t = window.setTimeout(() => setToast(''), 3000);
+  };
 
   // ─────────────────────────────────────────────────────────────────────────
   // ALL HOOKS MUST RUN BEFORE ANY CONDITIONAL RETURN (Rules of Hooks).
@@ -44,11 +91,17 @@ const Trainees = () => {
     setPage((p) => Math.min(p, Math.max(1, Math.ceil((trainees.length || 0) / rowsPerPage))));
   }, [trainees.length, rowsPerPage]);
 
-  const handleTraineeSelect = (traineeId) => {
-    setSelectedTrainees((prev) =>
-      prev.includes(traineeId) ? prev.filter((id) => id !== traineeId) : [...prev, traineeId]
-    );
-  };
+  // Close the batch picker when clicking outside it.
+  useEffect(() => {
+    if (!pickerOpen) return undefined;
+    const onDocClick = (e) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target)) {
+        setPickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [pickerOpen]);
 
   const handleSaveBatches = async () => {
     if (!batchModalTrainee || chosenBatchIds.length === 0) return;
@@ -91,14 +144,6 @@ const Trainees = () => {
     );
   }
 
-  const totalTrainees = trainees.length;
-  const totalPages = Math.max(1, Math.ceil(totalTrainees / rowsPerPage));
-  
-  const safePage = Math.min(page, totalPages);
-  const startIdx = (safePage - 1) * rowsPerPage;
-  const endIdx = startIdx + rowsPerPage;
-  const paginatedTrainees = trainees.slice(startIdx, endIdx);
-
   if (status === 'failed') {
     return (
       <div style={{ padding: isMobile ? '16px 20px' : '32px 36px', fontFamily: 'Inter, system-ui, sans-serif', background: '#F8FAFC', minHeight: '100vh' }}>
@@ -111,7 +156,7 @@ const Trainees = () => {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // DERIVED PAGINATION VALUES
+  // DERIVED PAGINATION VALUES (declared ONCE, after the early returns)
   // ─────────────────────────────────────────────────────────────────────────
 
   const totalTrainees = trainees.length;
@@ -394,6 +439,13 @@ const Trainees = () => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── TOAST ── */}
+      {toast && (
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: '#0F172A', color: '#fff', padding: '12px 18px', borderRadius: 10, fontSize: 14, fontWeight: 600, boxShadow: '0 10px 30px rgba(15,23,42,0.25)', zIndex: 2000 }}>
+          {toast}
         </div>
       )}
     </div>

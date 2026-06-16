@@ -452,7 +452,7 @@ const Batches = () => {
     setSearch(''); setStatusFilter('all'); setCourseFilter('all'); setTrainerFilter('all');
   };
 
-  // ── Modal / action handlers ──
+  // ── Modal / action handlers ──vbcvbcv
   const openAdd    = ()  => { if (!isAdmin) return; dispatch(clearBatchErrors()); setTarget(null); setModal('add'); };
   const openEdit   = (b) => { if (!isAdmin) return; dispatch(clearBatchErrors()); setTarget(b);    setModal('edit'); };
   const openDelete = (b) => { if (!isAdmin) return; setTarget(b); setModal('delete'); };
