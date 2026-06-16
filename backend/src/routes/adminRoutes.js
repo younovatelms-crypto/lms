@@ -5,6 +5,7 @@ const User         = require('../models/User');
 const Registration = require('../models/Registration');
 const Batch        = require('../models/Batch');
 const Session      = require('../models/Session');
+const Interview    = require('../models/Interview');
 const { protect, authorize } = require('../middleware/auth');
 const mongoose = require('mongoose');
 
@@ -587,4 +588,157 @@ router.post('/trainees/assign-batch', async (req, res) => {
     });
   }
 });
+
+// ── PLACEMENT PIPELINE ────────────────────────────────────────────────────────
+const PIPELINE_STAGES = {
+  enrolled: 'Pipeline Eligible',
+  training: 'Profile Review',
+  ready: 'Employer Matched',
+  interview_scheduled: 'Interview Scheduled',
+  interview_done: 'Interview Done',
+  offer_extended: 'Offer Extended',
+  placed: 'Placed',
+  not_placed: 'Not Placed'
+};
+
+// GET /api/admin/pipeline
+router.get('/pipeline', async (req, res) => {
+  const { search, batch, program } = req.query;
+  const filter = { role: 'trainee', isActive: true };
+  
+  if (search) filter.$or = [
+    { name: { $regex: search, $options: 'i' } },
+    { email: { $regex: search, $options: 'i' } }
+  ];
+  if (batch) filter.batchId = batch;
+  
+  const pipeline = await User.aggregate([
+    { $match: filter },
+    { $lookup: { from: 'batches', localField: 'batchId', foreignField: '_id', as: 'batch' } },
+    { $unwind: { path: '$batch', preserveNullAndEmptyArrays: true } },
+    { $group: {
+      _id: '$placementStatus',
+      candidates: { $push: {
+        _id: '$_id',
+        name: '$name',
+        email: '$email',
+        batch: '$batch.name',
+        companyName: '$companyName',
+        ctc: '$ctc',
+        placementNote: '$placementNote',
+        updatedAt: '$placementUpdatedAt'
+      }}
+    }}
+  ]);
+  
+  const stats = {
+    total: await User.countDocuments({ role: 'trainee', isActive: true }),
+    stages: Object.keys(PIPELINE_STAGES).reduce((acc, stage) => {
+      const stageData = pipeline.find(p => p._id === stage);
+      acc[stage] = {
+        name: PIPELINE_STAGES[stage],
+        count: stageData ? stageData.candidates.length : 0,
+        candidates: stageData ? stageData.candidates : []
+      };
+      return acc;
+    }, {})
+  };
+  
+  return res.json({ success: true, pipeline: stats, stages: PIPELINE_STAGES });
+});
+
+// PUT /api/admin/pipeline/:id/stage
+router.put('/pipeline/:id/stage', async (req, res) => {
+  const { stage, notes, companyName, ctc } = req.body;
+  
+  if (!Object.keys(PIPELINE_STAGES).includes(stage)) {
+    return res.status(400).json({ success: false, message: 'Invalid pipeline stage' });
+  }
+  
+  const update = { 
+    placementStatus: stage, 
+    placementUpdatedAt: new Date() 
+  };
+  if (notes) update.placementNote = notes;
+  if (companyName) update.companyName = companyName;
+  if (ctc) update.ctc = ctc;
+  
+  const trainee = await User.findByIdAndUpdate(req.params.id, update, { new: true });
+  if (!trainee) return res.status(404).json({ success: false, message: 'Trainee not found' });
+  
+  return res.json({ success: true, trainee: trainee.toPublic(), message: `Moved to ${PIPELINE_STAGES[stage]}` });
+});
+
+// ── INTERVIEWS ────────────────────────────────────────────────────────────────
+// GET /api/admin/interviews?traineeId=&status=
+router.get('/interviews', async (req, res) => {
+  const { traineeId, status } = req.query;
+  const filter = {};
+  if (traineeId) filter.trainee = traineeId;
+  if (status) filter.status = status;
+  
+  const interviews = await Interview.find(filter)
+    .populate('trainee', 'name email batchId')
+    .populate('scheduledBy', 'name')
+    .sort('-scheduledAt');
+  
+  return res.json({ success: true, interviews });
+});
+
+// GET /api/admin/interviews/:id
+router.get('/interviews/:id', async (req, res) => {
+  const interview = await Interview.findById(req.params.id)
+    .populate('trainee', 'name email batchId')
+    .populate('scheduledBy', 'name');
+  
+  if (!interview) return res.status(404).json({ success: false, message: 'Interview not found' });
+  return res.json({ success: true, interview });
+});
+
+// POST /api/admin/interviews
+router.post('/interviews', async (req, res) => {
+  const { traineeId, type, scheduledAt, interviewerName, interviewerEmail, meetingLink, notes } = req.body;
+  
+  if (!traineeId || !type || !scheduledAt) {
+    return res.status(400).json({ success: false, message: 'traineeId, type and scheduledAt required' });
+  }
+  
+  const interview = await Interview.create({
+    trainee: traineeId,
+    type,
+    scheduledAt,
+    interviewerName: interviewerName || '',
+    interviewerEmail: interviewerEmail || '',
+    meetingLink: meetingLink || '',
+    notes: notes || '',
+    scheduledBy: req.user._id
+  });
+  
+  await User.findByIdAndUpdate(traineeId, { placementStatus: 'interview_scheduled' });
+  
+  return res.status(201).json({ success: true, interview });
+});
+
+// PUT /api/admin/interviews/:id
+router.put('/interviews/:id', async (req, res) => {
+  const interview = await Interview.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true })
+    .populate('trainee', 'name email');
+  
+  if (!interview) return res.status(404).json({ success: false, message: 'Interview not found' });
+  
+  // Sync placement status
+  if (req.body.status === 'completed' && req.body.outcome === 'passed') {
+    await User.findByIdAndUpdate(interview.trainee._id, { placementStatus: 'placed' });
+  }
+  
+  return res.json({ success: true, interview });
+});
+
+// DELETE /api/admin/interviews/:id
+router.delete('/interviews/:id', async (req, res) => {
+  const interview = await Interview.findByIdAndDelete(req.params.id);
+  if (!interview) return res.status(404).json({ success: false, message: 'Interview not found' });
+  return res.json({ success: true, message: 'Interview deleted' });
+});
+
 module.exports = router;

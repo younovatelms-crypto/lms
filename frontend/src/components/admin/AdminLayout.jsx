@@ -22,7 +22,7 @@ const NAV = [
     label: 'Management',
     items: [
       // Flat items
-      { to: '/admin/programs',  icon: 'book',       label: 'Programs' },
+      // { to: '/admin/programs',  icon: 'book',       label: 'Programs' },
       { to: '/admin/batches',   icon: 'stack-2',    label: 'Batches'  },
       { to: '/admin/courses',   icon: 'stack-2',    label: 'courses'  },
       // Sub-menu: Users
@@ -35,17 +35,18 @@ const NAV = [
           { to: '/admin/trainers',      icon: 'chalkboard',    label: 'Trainers'      },
         ],
       },
+       { to: '/admin/sessions',      icon: 'video',         label: 'Sessions'      }, 
 
       // Sub-menu: Sessions & Content
-      {
-        icon: 'device-laptop',
-        label: 'Sessions & LMS',
-        children: [
-          { to: '/admin/sessions',      icon: 'video',         label: 'Sessions'      },
-          { to: '/admin/lms',           icon: 'books',         label: 'LMS Content'   },
-          { to: '/admin/assignments',   icon: 'file-text',     label: 'Assignments'   },
-        ],
-      },
+      // {
+      //   icon: 'device-laptop',
+      //   label: 'Sessions & LMS',
+      //   children: [
+      //     { to: '/admin/sessions',      icon: 'video',         label: 'Sessions'      },
+      //     // { to: '/admin/lms',           icon: 'books',         label: 'LMS Content'   },
+      //     // { to: '/admin/assignments',   icon: 'file-text',     label: 'Assignments'   },
+      //   ],
+      // },
 
       { to: '/admin/registrations', icon: 'clipboard-list', label: 'Registrations' },
     ],
@@ -60,7 +61,7 @@ const NAV = [
         children: [
           { to: '/admin/pipeline',    icon: 'arrows-right',   label: 'Pipeline'    },
           { to: '/admin/interviews',  icon: 'calendar-event', label: 'Interviews'  },
-          { to: '/admin/evaluations', icon: 'star',           label: 'Evaluations' },
+          // { to: '/admin/evaluations', icon: 'star',           label: 'Evaluations' },
         ],
       },
     ],
@@ -74,8 +75,8 @@ const NAV = [
   {
     label: 'System',
     items: [
-      { to: '/admin/reports',   icon: 'file-analytics', label: 'Reports'  },
-      { to: '/admin/support',   icon: 'headset',        label: 'Support'  },
+      // { to: '/admin/reports',   icon: 'file-analytics', label: 'Reports'  },
+      // { to: '/admin/support',   icon: 'headset',        label: 'Support'  },
       { to: '/admin/settings',  icon: 'settings',       label: 'Settings' },
     ],
   },

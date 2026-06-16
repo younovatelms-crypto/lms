@@ -1,20 +1,16 @@
 // src/pages/admin/AdminSettings.jsx
-// LMS Admin Settings — tabbed, Redux-backed.
+// LMS Admin Settings — tabbed, self-contained.
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import {
-  fetchSettings,
-  saveSettingsSection,
   fetchRoles,
   fetchUsersByRole,
   resetUserPassword as resetPasswordThunk,
-  updateSettingsField,
-  selectSettings,
-  selectSettingsStatus,
   selectRoles,
   selectUsersByRole,
 } from '../../features/admin/adminSlice';
+import { updateProfile, selectCurrentUser } from '../../features/auth/authSlice';
 import toast from 'react-hot-toast';
 
 // ─── Config ─────────────────────────────────────────────────────────────────
@@ -217,12 +213,22 @@ const SectionShell = ({ title, desc, saving, onSave, dirty, children, saveLabel 
 
 export default function AdminSettings() {
   const dispatch = useAppDispatch();
+  const currentUser = useAppSelector(selectCurrentUser);
   const [tab, setTab] = useState('general');
-  const settings = useAppSelector(selectSettings);
-  const settingsStatus = useAppSelector(selectSettingsStatus);
+  const [form, setForm] = useState(DEFAULTS);
+  const [loaded, setLoaded] = useState(DEFAULTS);
+  const [saving, setSaving] = useState(null);
+  
+  // General tab - Admin profile
+  const [name, setName] = useState(currentUser?.name || '');
+  const [email, setEmail] = useState(currentUser?.email || '');
+  const [phone, setPhone] = useState(currentUser?.phone || '');
+  const [bio, setBio] = useState(currentUser?.bio || '');
+  const [department, setDepartment] = useState(currentUser?.department || '');
+  const [designation, setDesignation] = useState(currentUser?.designation || '');
+  
   const roles = useAppSelector(selectRoles);
   const usersByRole = useAppSelector(selectUsersByRole);
-  const [saving, setSaving] = useState(null);
   
   // Account section
   const [selectedRole, setSelectedRole] = useState('');
@@ -238,19 +244,18 @@ export default function AdminSettings() {
   const [showPaymentKey, setShowPaymentKey] = useState(false);
   const [showZoomSecret, setShowZoomSecret] = useState(false);
 
-  const form = settings || DEFAULTS;
+  const setField = (section, key, value) =>
+    setForm((f) => ({ ...f, [section]: { ...f[section], [key]: value } }));
 
-  const setField = (section, key, value) => {
-    dispatch(updateSettingsField({ section, key, value }));
-  };
+  const dirty = (section) =>
+    JSON.stringify(form[section]) !== JSON.stringify(loaded[section]);
 
-  const dirty = (section) => {
-    return false; // Redux handles this
-  };
-
-  useEffect(() => {
-    dispatch(fetchSettings());
-  }, [dispatch]);
+  const generalDirty = name !== (currentUser?.name || '') || 
+                       email !== (currentUser?.email || '') || 
+                       phone !== (currentUser?.phone || '') || 
+                       bio !== (currentUser?.bio || '') ||
+                       department !== (currentUser?.department || '') ||
+                       designation !== (currentUser?.designation || '');
 
   useEffect(() => {
     if (tab === 'account') {
@@ -266,11 +271,19 @@ export default function AdminSettings() {
 
   const saveSection = async (section) => {
     setSaving(section);
+    toast.success('Settings saved (local only - no backend)');
+    const next = { ...form[section] };
+    setLoaded((l) => ({ ...l, [section]: next }));
+    setSaving(null);
+  };
+
+  const saveGeneral = async () => {
+    setSaving('general');
     try {
-      await dispatch(saveSettingsSection({ section, data: form[section] })).unwrap();
-      toast.success('Settings saved');
+      await dispatch(updateProfile({ name, phone, bio, department, designation })).unwrap();
+      toast.success('Profile updated successfully');
     } catch (err) {
-      toast.error(err || 'Failed to save');
+      toast.error(err || 'Failed to update profile');
     } finally {
       setSaving(null);
     }
@@ -326,20 +339,17 @@ export default function AdminSettings() {
   const grid = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 };
 
   const body = useMemo(() => {
-    if (settingsStatus === 'loading') return <Spinner />;
-    if (!settings) return <Spinner />;
     if (tab === 'general') {
-      const g = form.general;
       return (
-        <SectionShell title="General" desc="Organisation identity and locale defaults."
-          saving={saving === 'general'} dirty={dirty('general')} onSave={() => saveSection('general')}>
+        <SectionShell title="General" desc="Your profile information."
+          saving={saving === 'general'} dirty={generalDirty} onSave={saveGeneral}>
           <div className="as-grid" style={grid}>
-            <TextField label="Organisation name" value={g.orgName} onChange={(v) => setField('general', 'orgName', v)} placeholder="Younovate" />
-            <TextField label="Support email" type="email" value={g.supportEmail} onChange={(v) => setField('general', 'supportEmail', v)} placeholder="support@…" />
-            <TextField label="Logo URL" value={g.logoUrl} onChange={(v) => setField('general', 'logoUrl', v)} placeholder="https://…/logo.png" />
-            <TextField label="Academic year" value={g.academicYear} onChange={(v) => setField('general', 'academicYear', v)} placeholder="2025–26" />
-            <SelectField label="Timezone" value={g.timezone} onChange={(v) => setField('general', 'timezone', v)} options={TIMEZONES} />
-            <SelectField label="Default language" value={g.defaultLanguage} onChange={(v) => setField('general', 'defaultLanguage', v)} options={LANGUAGES} />
+            <TextField label="Name" value={name} onChange={setName} placeholder="Your name" />
+            <TextField label="Email" type="email" value={email} onChange={setEmail} placeholder="you@example.com" />
+            <TextField label="Phone" value={phone} onChange={setPhone} placeholder="+91 1234567890" />
+            <TextField label="Department" value={department} onChange={setDepartment} placeholder="Administration" />
+            <TextField label="Designation" value={designation} onChange={setDesignation} placeholder="System Administrator" />
+            <TextField label="Bio" value={bio} onChange={setBio} placeholder="Tell us about yourself" />
           </div>
         </SectionShell>
       );
@@ -488,7 +498,7 @@ export default function AdminSettings() {
                   setShowConfirmPassword(false);
                 }}
                 options={[
-                  ['', users.length === 0 ? 'No users found' : 'Choose a user'], 
+                  ['', selectedRole ? (usersByRole.length === 0 ? 'No users found' : 'Choose a user') : 'Select role first'], 
                   ...(selectedRole ? usersByRole.map(u => [u._id, `${u.name} (${u.email})`]) : [])
                 ]}
               />
@@ -561,7 +571,7 @@ export default function AdminSettings() {
         </div>
       </div>
     );
-  }, [tab, form, saving, selectedRole, selectedUser, newPassword, confirmPassword, showNewPassword, showConfirmPassword, resetSaving, passwordErrors, usersByRole, roles, showPaymentKey, showZoomSecret, settings, settingsStatus]);
+  }, [tab, form, loaded, saving, selectedRole, selectedUser, newPassword, confirmPassword, showNewPassword, showConfirmPassword, resetSaving, passwordErrors, usersByRole, roles, showPaymentKey, showZoomSecret, name, email, phone, bio, department, designation, generalDirty]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="as-wrap" style={{ padding: 28, fontFamily: 'Public Sans, system-ui, sans-serif' }}>

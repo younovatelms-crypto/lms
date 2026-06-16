@@ -14,17 +14,17 @@ const NAV = [
     items: [
       { to: '/trainer/sessions',    icon: 'video',            label: 'Sessions'    },
       { to: '/trainer/attendance',  icon: 'clipboard-check',  label: 'Attendance'  },
-      { to: '/trainer/assignments', icon: 'file-pencil',      label: 'Assignments' },
+      // { to: '/trainer/assignments', icon: 'file-pencil',      label: 'Assignments' },
       { to: '/trainer/batches',     icon: 'stack-2',          label: 'My Batches'  },
     ],
   },
-  {
-    label: 'Content',
-    items: [
-      { to: '/trainer/resources',   icon: 'books',            label: 'Resources'   },
-      { to: '/trainer/projects',    icon: 'git-branch',       label: 'Projects'    },
-    ],
-  },
+  // {
+  //   label: 'Content',
+  //   items: [
+  //     { to: '/trainer/resources',   icon: 'books',            label: 'Resources'   },
+  //     { to: '/trainer/projects',    icon: 'git-branch',       label: 'Projects'    },
+  //   ],
+  // },
   {
     label: 'System',
     items: [
