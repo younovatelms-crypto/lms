@@ -1,0 +1,323 @@
+.interview-scheduling {
+  padding: 20px;
+  background: #f5f8fc;
+  min-height: 100vh;
+}
+
+.page-header h2 {
+  color: #333;
+  font-size: 20px;
+  font-weight: 500;
+  margin: 0 0 20px 0;
+}
+
+.page-subheader {
+  margin-bottom: 30px;
+}
+
+.page-subheader h3 {
+  color: #333;
+  font-size: 28px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+}
+
+.subtitle {
+  color: #666;
+  font-size: 14px;
+  margin: 0;
+}
+
+.interview-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 25px;
+}
+
+.schedule-section,
+.outcome-section {
+  background: white;
+  border-radius: 8px;
+  padding: 25px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.schedule-section h4,
+.outcome-section h4 {
+  color: #333;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 20px 0;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  color: #333;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.form-group textarea {
+  resize: vertical;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+.btn-schedule,
+.btn-save-outcome {
+  width: 100%;
+  padding: 14px;
+  background: #1e3a5f;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-schedule:hover,
+.btn-save-outcome:hover {
+  background: #2c4f7c;
+}
+
+.upcoming-interviews {
+  margin-top: 30px;
+}
+
+.upcoming-interviews h4 {
+  color: #333;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 15px 0;
+}
+
+.upcoming-interviews table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.upcoming-interviews thead {
+  background: #f8f9fa;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.upcoming-interviews th {
+  padding: 10px 12px;
+  text-align: left;
+  color: #666;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.upcoming-interviews td {
+  padding: 14px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 13px;
+}
+
+.upcoming-interviews tbody tr {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.upcoming-interviews tbody tr:hover {
+  background: #f8f9fa;
+}
+
+.candidate-name {
+  color: #333;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.candidate-meta {
+  color: #666;
+  font-size: 12px;
+}
+
+.status-badge {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-badge.scheduled {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.candidate-summary {
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+}
+
+.candidate-summary h5 {
+  color: #333;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 5px 0;
+}
+
+.candidate-summary p {
+  color: #666;
+  font-size: 13px;
+  margin: 0 0 10px 0;
+}
+
+.tags {
+  display: flex;
+  gap: 8px;
+}
+
+.tag {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.tag.blue {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.tag.green {
+  background: #e8f5e9;
+  color: #4caf50;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #999;
+  font-size: 14px;
+}
+
+@media (max-width: 1024px) {
+  .interview-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .outcome-section {
+    margin-top: 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .interview-scheduling {
+    padding: 15px;
+  }
+
+  .page-subheader h3 {
+    font-size: 22px;
+  }
+
+  .schedule-section,
+  .outcome-section {
+    padding: 20px;
+  }
+
+  .upcoming-interviews table {
+    font-size: 12px;
+  }
+
+  .upcoming-interviews th,
+  .upcoming-interviews td {
+    padding: 10px 8px;
+  }
+
+  .candidate-name {
+    font-size: 13px;
+  }
+
+  .candidate-meta {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 480px) {
+  .interview-scheduling {
+    padding: 10px;
+  }
+
+  .page-subheader h3 {
+    font-size: 20px;
+  }
+
+  .subtitle {
+    font-size: 12px;
+  }
+
+  .schedule-section,
+  .outcome-section {
+    padding: 15px;
+  }
+
+  .schedule-section h4,
+  .outcome-section h4 {
+    font-size: 16px;
+  }
+
+  .form-group label {
+    font-size: 12px;
+  }
+
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    font-size: 13px;
+    padding: 8px 10px;
+  }
+
+  .upcoming-interviews {
+    overflow-x: auto;
+  }
+
+  .upcoming-interviews table {
+    min-width: 500px;
+  }
+
+  .candidate-summary {
+    padding: 12px;
+  }
+
+  .candidate-summary h5 {
+    font-size: 14px;
+  }
+
+  .tags {
+    flex-wrap: wrap;
+  }
+}
+

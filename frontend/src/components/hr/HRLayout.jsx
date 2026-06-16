@@ -14,16 +14,16 @@ const NAV = [
     items: [
       { to: '/hr/pipeline',      icon: 'arrows-right',     label: 'Pipeline'     },
       { to: '/hr/interviews',    icon: 'calendar-event',   label: 'Interviews'   },
-      { to: '/hr/evaluations',   icon: 'clipboard-check',  label: 'Evaluations'  },
+      // { to: '/hr/evaluations',   icon: 'clipboard-check',  label: 'Evaluations'  },
     ],
   },
-  {
-    label: 'Reports',
-    items: [
-      { to: '/hr/reports',       icon: 'file-analytics',   label: 'Reports'      },
-      { to: '/hr/analytics',     icon: 'chart-bar',        label: 'Analytics'    },
-    ],
-  },
+  // {
+  //   label: 'Reports',
+  //   items: [
+  //     { to: '/hr/reports',       icon: 'file-analytics',   label: 'Reports'      },
+  //     { to: '/hr/analytics',     icon: 'chart-bar',        label: 'Analytics'    },
+  //   ],
+  // },
   {
     label: 'System',
     items: [

@@ -41,90 +41,12 @@ const Trainees = () => {
   }, [dispatch]);
 
   useEffect(() => {
-    const maxPage = Math.max(1, Math.ceil((trainees.length || 0) / rowsPerPage));
-    setPage((p) => Math.min(p, maxPage));
+    setPage((p) => Math.min(p, Math.max(1, Math.ceil((trainees.length || 0) / rowsPerPage))));
   }, [trainees.length, rowsPerPage]);
 
-  // Close the dropdown when clicking outside of it.
-  useEffect(() => {
-    if (!pickerOpen) return;
-    const onDown = (e) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target)) setPickerOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [pickerOpen]);
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // HELPERS
-  // ─────────────────────────────────────────────────────────────────────────
-
-  // Normalize a trainee's batches into [{ id, name }] (handles populated objects or ids).
-  const getTraineeBatches = (trainee) => {
-    const source = Array.isArray(trainee.batchIds) && trainee.batchIds.length
-      ? trainee.batchIds
-      : (trainee.batchId ? [trainee.batchId] : []);
-
-    return source.map((b, i) => {
-      if (b && typeof b === 'object' && b.name) {
-        return { id: String(b._id || i), name: b.name };
-      }
-      const found = batches.find((x) => String(x._id) === String(b));
-      return { id: String(b || i), name: found ? found.name : `ID: ${b}` };
-    });
-  };
-
-  // Just the ids a trainee already belongs to (for filtering the dropdown).
-  const currentBatchIdSet = (trainee) =>
-    new Set(getTraineeBatches(trainee).map((b) => b.id));
-
-  const showToast = (msg) => {
-    const toastDiv = document.createElement('div');
-    toastDiv.style.cssText = `
-      position: fixed; top: 20px; right: 20px;
-      background: #10B981; color: white; padding: 12px 24px;
-      border-radius: 8px; font-size: 14px; font-weight: 600;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 9999;
-      animation: slideIn 0.3s ease-out;
-    `;
-    toastDiv.textContent = msg;
-
-    if (!document.querySelector('#toast-styles')) {
-      const style = document.createElement('style');
-      style.id = 'toast-styles';
-      style.textContent = `
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        @keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
-      `;
-      document.head.appendChild(style);
-    }
-
-    document.body.appendChild(toastDiv);
-    setTimeout(() => {
-      toastDiv.style.animation = 'slideOut 0.3s ease-out';
-      setTimeout(() => { if (document.body.contains(toastDiv)) document.body.removeChild(toastDiv); }, 300);
-    }, 3000);
-  };
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // HANDLERS
-  // ─────────────────────────────────────────────────────────────────────────
-
-  const openBatchModal = (trainee) => {
-    setBatchModalTrainee(trainee);
-    setChosenBatchIds([]);
-    setPickerOpen(false);
-  };
-
-  const closeBatchModal = () => {
-    setBatchModalTrainee(null);
-    setChosenBatchIds([]);
-    setPickerOpen(false);
-  };
-
-  const toggleChosen = (batchId) => {
-    setChosenBatchIds((prev) =>
-      prev.includes(batchId) ? prev.filter((id) => id !== batchId) : [...prev, batchId]
+  const handleTraineeSelect = (traineeId) => {
+    setSelectedTrainees((prev) =>
+      prev.includes(traineeId) ? prev.filter((id) => id !== traineeId) : [...prev, traineeId]
     );
   };
 
@@ -168,6 +90,14 @@ const Trainees = () => {
       </div>
     );
   }
+
+  const totalTrainees = trainees.length;
+  const totalPages = Math.max(1, Math.ceil(totalTrainees / rowsPerPage));
+  
+  const safePage = Math.min(page, totalPages);
+  const startIdx = (safePage - 1) * rowsPerPage;
+  const endIdx = startIdx + rowsPerPage;
+  const paginatedTrainees = trainees.slice(startIdx, endIdx);
 
   if (status === 'failed') {
     return (
