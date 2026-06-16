@@ -2,7 +2,9 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
 // ─── Base URL ─────────────────────────────────────────────────────────────────
-const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+//const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+
+const API = '';
 
 // ─── Auth Header ──────────────────────────────────────────────────────────────
 const authHeader = (getState) => ({
@@ -127,6 +129,42 @@ export const markAttendance = createAsyncThunk(
   }
 );
 
+
+// src/features/Trainer/trainerSlice.js  — ADD these thunks (near the others)
+
+// POST /api/trainer/sessions/:id/start
+export const startSession = createAsyncThunk(
+  'trainer/startSession',
+  async (sessionId, { getState, dispatch, rejectWithValue }) => {
+    try {
+      const { data } = await axios.post(
+        `${API}/api/trainer/sessions/${sessionId}/start`, {}, authHeader(getState)
+      );
+      dispatch(fetchTrainerSessions());          // refresh → status becomes 'live'
+      return { sessionId, data };
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || err.message || 'Failed to start session');
+    }
+  }
+);
+
+// POST /api/trainer/sessions/:id/end
+export const endSession = createAsyncThunk(
+  'trainer/endSession',
+  async (sessionId, { getState, dispatch, rejectWithValue }) => {
+    try {
+      const { data } = await axios.post(
+        `${API}/api/trainer/sessions/${sessionId}/end`, {}, authHeader(getState)
+      );
+      dispatch(fetchTrainerSessions());          // refresh → status becomes 'completed'
+      return { sessionId, data };
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || err.message || 'Failed to end session');
+    }
+  }
+);
+
+
 // ─── Slice ────────────────────────────────────────────────────────────────────
 
 const trainerSlice = createSlice({
@@ -153,6 +191,8 @@ const trainerSlice = createSlice({
 
     attendance:        {},
     attendanceStatus:  {},
+        sessionActionStatus: {},   // { [sessionId]: 'loading' | 'succeeded' | 'failed' }
+    sessionActionError:  {},
 
     markStatus:        'idle',
     markError:         null,
@@ -229,7 +269,19 @@ const trainerSlice = createSlice({
       .addCase(markAttendance.pending,   (s)    => { s.markStatus = 'loading';   s.markError = null; })
       .addCase(markAttendance.fulfilled, (s)    => { s.markStatus = 'succeeded'; })
       .addCase(markAttendance.rejected,  (s, a) => { s.markStatus = 'failed';    s.markError = a.payload; });
-  },
+  
+
+// ── Session start / end ────────────────────────────────────────────────────
+    builder
+      .addCase(startSession.pending,   (s, a) => { s.sessionActionStatus[a.meta.arg] = 'loading'; s.sessionActionError[a.meta.arg] = null; })
+      .addCase(startSession.fulfilled, (s, a) => { s.sessionActionStatus[a.meta.arg] = 'succeeded'; })
+      .addCase(startSession.rejected,  (s, a) => { s.sessionActionStatus[a.meta.arg] = 'failed';   s.sessionActionError[a.meta.arg] = a.payload; })
+      .addCase(endSession.pending,     (s, a) => { s.sessionActionStatus[a.meta.arg] = 'loading'; s.sessionActionError[a.meta.arg] = null; })
+      .addCase(endSession.fulfilled,   (s, a) => { s.sessionActionStatus[a.meta.arg] = 'succeeded'; })
+      .addCase(endSession.rejected,    (s, a) => { s.sessionActionStatus[a.meta.arg] = 'failed';   s.sessionActionError[a.meta.arg] = a.payload; });
+
+
+},
 });
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
@@ -255,6 +307,10 @@ export const selectActiveTab          = (s) => s.trainer.activeTab;
 export const selectGradingModal       = (s) => s.trainer.gradingModal;
 export const selectMarkStatus         = (s) => s.trainer.markStatus;  // ← ADDED
 export const selectMarkError          = (s) => s.trainer.markError;   // ← ADDED
+export const selectSessionActionStatus = (s) => s.trainer.sessionActionStatus;
+export const selectSessionActionError  = (s) => s.trainer.sessionActionError;
+
+
 
 export default trainerSlice.reducer;
 

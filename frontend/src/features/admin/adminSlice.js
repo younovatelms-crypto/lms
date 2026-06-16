@@ -1,6 +1,7 @@
 // src/features/admin/adminSlice.js
 // Complete admin slice — all exports your pages need are present.
-// Missing exports that caused compile errors are now added.
+// Trainees now fetch ALL records (limit=all) so batch-less trainees show too.
+// List reducers hardened with Array.isArray guards (works for array OR {users,meta}).
 
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import axios from 'axios';
@@ -11,6 +12,10 @@ const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 const authHeader = (getState) => ({
   headers: { Authorization: `Bearer ${getState().auth.token}` },
 });
+
+// Normalize any list response to an array, regardless of which key it uses.
+const toList = (payload, key) =>
+  Array.isArray(payload) ? payload : (payload?.[key] ?? []);
 
 
 // =============================================================================
@@ -45,7 +50,6 @@ export const fetchUsers = createAsyncThunk(
         ...authHeader(getState),
         params,
       });
-      console.log('fetchUsers API response:', data); // Debug log
       return data.data || data;
     } catch (err) {
       return rejectWithValue(
@@ -57,14 +61,17 @@ export const fetchUsers = createAsyncThunk(
 
 // ─── Trainees (role=trainee) ──────────────────────────────────────────────────
 // Used by Trainees.jsx as: dispatch(fetchAdminTrainees())
+// limit defaults to 'all' so EVERY trainee comes back (assigned to a batch or not).
 export const fetchAdminTrainees = createAsyncThunk(
   'admin/fetchAdminTrainees',
   async (params = {}, { getState, rejectWithValue }) => {
     try {
       const { data } = await axios.get(`${API}/api/admin/users`, {
         ...authHeader(getState),
-        params: { ...params, role: 'trainee' },
+        // role forced to trainee; caller can still override limit if it ever needs to.
+        params: { ...params, role: 'trainee', limit: params.limit ?? 'all' },
       });
+      // Return the normalized { users, meta } block (same shape as fetchUsers/fetchTrainers).
       return data.data || data;
     } catch (err) {
       return rejectWithValue(
@@ -82,7 +89,7 @@ export const fetchTrainers = createAsyncThunk(
     try {
       const { data } = await axios.get(`${API}/api/admin/users`, {
         ...authHeader(getState),
-        params: { ...params, role: 'trainer' },
+        params: { ...params, role: 'trainer', limit: params.limit ?? 'all' },
       });
       return data.data || data;
     } catch (err) {
@@ -283,14 +290,12 @@ export const deleteRegistration = createAsyncThunk(
   'admin/deleteRegistration',
   async (id, { getState, rejectWithValue }) => {
     try {
-      console.log('deleteRegistration called with ID:', id, typeof id);
       const { data } = await axios.delete(
         `${API}/api/admin/registrations/${id}`,
         authHeader(getState)
       );
       return { id, message: data.message };
     } catch (err) {
-      console.error('deleteRegistration error:', err.response?.data || err.message);
       return rejectWithValue(
         err.response?.data?.message || 'Failed to delete registration.'
       );
@@ -390,7 +395,7 @@ const initialState = {
   usersMeta:   null,
   usersStatus: 'idle',
   usersError:  null,
-  
+
   // Single user
   selectedUser: null,
   selectedUserStatus: 'idle',
@@ -462,11 +467,9 @@ const adminSlice = createSlice({
         state.usersError  = null;
       })
       .addCase(fetchUsers.fulfilled, (state, action) => {
-        console.log('fetchUsers fulfilled payload:', action.payload); // Debug log
         state.usersStatus = 'succeeded';
-        state.users       = action.payload.users  || action.payload;
-        state.usersMeta   = action.payload.meta   || null;
-        console.log('Users stored in state:', state.users); // Debug log
+        state.users       = toList(action.payload, 'users');
+        state.usersMeta   = action.payload?.meta || null;
       })
       .addCase(fetchUsers.rejected, (state, action) => {
         state.usersStatus = 'failed';
@@ -480,8 +483,8 @@ const adminSlice = createSlice({
       })
       .addCase(fetchAdminTrainees.fulfilled, (state, action) => {
         state.traineesStatus = 'succeeded';
-        state.trainees       = action.payload.users  || action.payload;
-        state.traineesMeta   = action.payload.meta   || null;
+        state.trainees       = toList(action.payload, 'users');
+        state.traineesMeta   = action.payload?.meta || null;
       })
       .addCase(fetchAdminTrainees.rejected, (state, action) => {
         state.traineesStatus = 'failed';
@@ -495,8 +498,8 @@ const adminSlice = createSlice({
       })
       .addCase(fetchTrainers.fulfilled, (state, action) => {
         state.trainersStatus = 'succeeded';
-        state.trainers       = action.payload.users  || action.payload;
-        state.trainersMeta   = action.payload.meta   || null;
+        state.trainers       = toList(action.payload, 'users');
+        state.trainersMeta   = action.payload?.meta || null;
       })
       .addCase(fetchTrainers.rejected, (state, action) => {
         state.trainersStatus = 'failed';
@@ -574,8 +577,8 @@ const adminSlice = createSlice({
       })
       .addCase(fetchBatches.fulfilled, (state, action) => {
         state.batchesStatus = 'succeeded';
-        state.batches       = action.payload.batches || action.payload;
-        state.batchesMeta   = action.payload.meta    || null;
+        state.batches       = toList(action.payload, 'batches');
+        state.batchesMeta   = action.payload?.meta || null;
       })
       .addCase(fetchBatches.rejected, (state, action) => {
         state.batchesStatus = 'failed';
@@ -589,8 +592,8 @@ const adminSlice = createSlice({
       })
       .addCase(fetchRegistrations.fulfilled, (state, action) => {
         state.registrationsStatus = 'succeeded';
-        state.registrations       = action.payload.registrations || action.payload;
-        state.registrationsMeta   = action.payload.meta          || null;
+        state.registrations       = toList(action.payload, 'registrations');
+        state.registrationsMeta   = action.payload?.meta || null;
       })
       .addCase(fetchRegistrations.rejected, (state, action) => {
         state.registrationsStatus = 'failed';

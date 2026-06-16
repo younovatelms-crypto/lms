@@ -34,19 +34,25 @@ const userSchema = new mongoose.Schema({
   profilePicture: { type: String, default: '' },
   linkedIn:       { type: String, default: '' },
   github:         { type: String, default: '' },
-  // NEW FIELDS
   gender:         { type: String, default: '' },
   dateOfBirth:    { type: Date },
-  designation:    { type: String, default: '' },
-  department:     { type: String, default: '' },
   address:        { type: String, default: '' },
   city:           { type: String, default: '' },
   state:          { type: String, default: '' },
   country:        { type: String, default: '' },
   pincode:        { type: String, default: '' },
 
+  // ── Shared professional fields (used by trainer / hr / trainee as applicable) ──
+  // Consolidated here so each path is declared exactly once.
+  designation:    { type: String, default: '' },
+  department:     { type: String, default: '' },
+  experience:     { type: Number, default: 0 },   // years
+  specialization: { type: String, default: '' },
+  portfolioUrl:   { type: String, default: '' },
+
   // ── Trainee-specific ──────────────────────────────────────────────────────
-  batchId:            { type: mongoose.Schema.Types.ObjectId, ref: 'Batch', default: null },
+  // A user can now belong to MULTIPLE batches. This array is the source of truth.
+  batchIds:           [{ type: mongoose.Schema.Types.ObjectId, ref: 'Batch' }],
   enrolledAt:         { type: Date },
   skills:             [{ type: String }],
   placementStatus:    {
@@ -64,25 +70,16 @@ const userSchema = new mongoose.Schema({
   branch:         { type: String, default: '' },
   graduationYear: { type: Number },
   // Career
-  portfolioUrl:   { type: String, default: '' },
   resumeUrl:      { type: String, default: '' },
-  hrEvaluation:       hrEvaluationSchema,
+  hrEvaluation:   hrEvaluationSchema,
 
   // ── Trainer-specific ──────────────────────────────────────────────────────
-  expertise: [{ type: String }],
-  designation:      { type: String, default: '' },
-  experience:       { type: Number, default: 0 }, // years
-  specialization:   { type: String, default: '' },
-  certifications:   [{ type: String }],
-  currentCompany:   { type: String, default: '' },
-  portfolioUrl:     { type: String, default: '' },
+  expertise:      [{ type: String }],
+  certifications: [{ type: String }],
+  currentCompany: { type: String, default: '' },
 
-  // HR-specific
-  designation:     { type: String, default: '' },
-  department:      { type: String, default: '' },
-  employeeId:      { type: String, default: '' },
-  experience:      { type: Number, default: 0 },
-  specialization:  { type: String, default: '' },
+  // ── HR-specific ─────────────────────────────────────────────────────────────
+  employeeId:     { type: String, default: '' },
 
   // ── Auth fields (select: false — never leaked) ────────────────────────────
   sessionToken:          { type: String, select: false },
@@ -91,12 +88,29 @@ const userSchema = new mongoose.Schema({
   passwordResetToken:    { type: String, select: false },
   passwordResetExpires:  { type: Date,   select: false },
   passwordResetAttempts: { type: Number, default: 0, select: false },
-}, { timestamps: true });
+}, {
+  timestamps: true,
+  toJSON:   { virtuals: true },
+  toObject: { virtuals: true },
+});
+
+// ── Backward-compatible populate-virtual ──────────────────────────────────────
+// `batchId` resolves to the FIRST batch in `batchIds`, so existing code that does
+// `.populate('batchId', 'name')` and reads `user.batchId.name` keeps working
+// unchanged — while `batchIds` holds every batch the user belongs to.
+// (localField/foreignField are what the previous "Cannot populate virtual" error
+//  was missing.)
+userSchema.virtual('batchId', {
+  ref:          'Batch',
+  localField:   'batchIds',
+  foreignField: '_id',
+  justOne:      true,   // return a single Batch document, not an array
+});
 
 // ── Indexes ───────────────────────────────────────────────────────────────────
 userSchema.index({ email: 1 }, { unique: true });
 userSchema.index({ role: 1, isActive: 1 });
-userSchema.index({ batchId: 1 });
+userSchema.index({ batchIds: 1 });
 userSchema.index({ placementStatus: 1 });
 
 // ── Hash password before save ─────────────────────────────────────────────────
