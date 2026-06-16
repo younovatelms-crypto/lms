@@ -32,6 +32,10 @@ import AdminUsers        from './pages/admin/Users';
 import AdminSettings     from './pages/admin/Settings';
 import AdminReports      from './pages/admin/Reports';
 import AdminSupport      from './pages/admin/Support';
+import AdminPipeline from './pages/admin/Pipeline';
+import AdminInterviews from './pages/admin/Interviews';
+import BatchDetails from './pages/admin/BatchDetails';
+
 
 import Courses from './pages/admin/Courses';
 import Profile from './pages/admin/Profilepage';
@@ -63,6 +67,7 @@ import TraineeAssignments from './pages/trainee/Assignments';
 import TraineeSettings from './pages/trainee/Settings';
 import Trainee_Courses from './pages/trainee/Trainee_Courses';
 import Trainee_CourseDetail from './pages/trainee/Trainee_CourseDetail';
+
 
 
 
