@@ -162,7 +162,7 @@ function App() {
             <Route path="sessions/new"      element={<SessionDetail mode="create" />} />
             <Route path="sessions/:id"      element={<SessionDetail mode="view" />} />
             <Route path="sessions/:id/edit" element={<SessionDetail mode="edit" />} />
-
+             <Route path="batches/view/:id" element={<BatchDetails />} />
 
             <Route path="profile" element={<Profile />} />
             <Route index element={<Navigate to="dashboard" replace />} />
