@@ -1,6 +1,11 @@
 // src/controllers/sessionController.js
+'use strict';
 const Session = require('../models/Session');
-const { generateLiveKitToken } = require('../services/livekitService');
+const Recording = require('../models/Recording');
+const { AccessToken } = require('livekit-server-sdk');
+
+// NEW line I added (line 8):
+const { generateLiveKitToken, startRecording, stopRecording, LIVEKIT_URL } = require('../services/livekitService');
 const { emitToRole } = require('../services/socketService');
 
 // GET /api/sessions
@@ -69,7 +74,7 @@ const deleteSession = async (req, res) => {
   res.json({ success: true, message: 'Session deleted' });
 };
 
-// POST /api/sessions/:id/start (Trainer)
+/* POST /api/sessions/:id/start (Trainer)
 const startSession = async (req, res) => {
   const session = await Session.findById(req.params.id);
   if (!session) return res.status(404).json({ success: false, message: 'Session not found' });
@@ -88,7 +93,7 @@ const startSession = async (req, res) => {
   emitToRole('trainee', 'session:status', { id: session._id, status: 'live' });
 
   res.json({ success: true, token, roomName });
-};
+}; */
 
 // POST /api/sessions/:id/join (Trainee)
 const joinSession = async (req, res) => {
@@ -102,7 +107,7 @@ const joinSession = async (req, res) => {
   res.json({ success: true, token, roomName: session.roomName });
 };
 
-// POST /api/sessions/:id/end (Trainer)
+/* POST /api/sessions/:id/end (Trainer)
 const endSession = async (req, res) => {
   const session = await Session.findById(req.params.id);
   if (!session) return res.status(404).json({ success: false, message: 'Session not found' });
@@ -114,6 +119,108 @@ const endSession = async (req, res) => {
   emitToRole('trainee', 'session:status', { id: session._id, status: 'completed' });
 
   res.json({ success: true, message: 'Session ended' });
+};  */
+
+
+
+// POST /api/livekit/token
+const  getToken = async (req, res) => {
+  try {
+    const { room, identity, name, role = 'trainer' } = req.body || {};
+    if (!room || !identity) {
+      return res.status(400).json({ success: false, message: 'room and identity are required' });
+    }
+
+    const apiKey    = process.env.LIVEKIT_API_KEY;
+    const apiSecret = process.env.LIVEKIT_API_SECRET;
+    const wsUrl     = process.env.LIVEKIT_URL;
+
+    if (!apiKey || !apiSecret || !wsUrl) {
+      console.error('[livekit] missing env →', { key: !!apiKey, secret: !!apiSecret, url: !!wsUrl });
+      return res.status(500).json({
+        success: false,
+        message: 'LiveKit is not configured on the server (missing API key / secret / url).',
+      });
+    }
+
+    const canPublish = role !== 'student'; // trainer publishes, student subscribe-only
+    const at = new AccessToken(apiKey, apiSecret, { identity, name: name || identity, ttl: '2h' });
+    at.addGrant({
+      roomJoin: true,
+      room,
+      canPublish,
+      canSubscribe: true,
+      canPublishData: true,
+      roomRecord: canPublish, // lets a trainer trigger recording
+    });
+
+    const token = await at.toJwt();          // v2: lowercase + await
+    return res.json({ success: true, token, url: wsUrl });
+  } catch (err) {
+    console.error('LiveKit token error →', err);
+    return res.status(500).json({ success: false, message: err.message || 'Failed to generate token' });
+  }
+};
+
+
+
+
+
+
+
+
+// POST /api/trainer/sessions/:id/start
+const startSession = async (req, res) => {
+  try {
+    const session = await Session.findById(req.params.id);
+    if (!session) return res.status(404).json({ success: false, message: 'Session not found' });
+
+    const roomName = session._id.toString();
+    const egressId = await startRecording(roomName);   // returns egress id
+
+    // create the Recording row up-front; webhook fills the rest
+    const recording = await Recording.create({
+      sessionId: session._id,
+      batchId:   session.batchId,
+      trainerId: session.trainerId,
+      egressId,
+      roomName,
+      status:    'active',
+      startedAt: new Date(),
+    });
+
+    session.status          = 'live';
+    session.roomName        = roomName;
+    session.egressId        = egressId;
+    session.recordingStatus = 'recording';
+    session.startedAt       = new Date();
+    session.recordings.push(recording._id);
+    await session.save();
+
+    res.json({ success: true, message: 'Session started & recording', session });
+  } catch (err) {
+    console.error('startSession error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// POST /api/trainer/sessions/:id/end
+const endSession = async (req, res) => {
+  try {
+    const session = await Session.findById(req.params.id);
+    if (!session) return res.status(404).json({ success: false, message: 'Session not found' });
+
+    await stopRecording(session.egressId);             // fires the egress_ended webhook
+    session.status          = 'completed';
+    session.recordingStatus = 'processing';            // becomes 'available' in the webhook
+    session.endedAt         = new Date();
+    await session.save();
+
+    res.json({ success: true, message: 'Session ended', session });
+  } catch (err) {
+    console.error('endSession error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
 };
 
 module.exports = {
@@ -125,4 +232,5 @@ module.exports = {
   startSession,
   joinSession,
   endSession,
+  getToken,
 };

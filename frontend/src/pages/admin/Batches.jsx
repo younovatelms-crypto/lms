@@ -1,13 +1,13 @@
 // src/pages/admin/Batches.jsx
 // Role-aware: Admin gets full CRUD. Trainer gets read-only.
-// Courses loaded from Redux courseSlice (state.courses)
-// Modal: centered overlay (not side panel) — mobile responsive
+// TABLE layout with Create / View / Edit / Delete, multi-filter + pagination.
+// View → /admin/batches/view/:id (BatchDetails page).
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
-// ── batchSlice ────────────────────────────────────────────────────────────────
 import {
   fetchBatches,  createBatch,  updateBatch,  deleteBatch,
   selectAllBatches, selectBatchesStatus, selectBatchesError,
@@ -17,20 +17,17 @@ import {
   resetBatchCreateStatus, clearBatchErrors,
 } from '../../features/session/batchSlice';
 
-// ── courseSlice — course options for dropdown ─────────────────────────────────
 import {
   fetchCourses,
   selectAllCourses,
   selectCoursesStatus,
 } from '../../features/admin/courseSlice';
 
-// ── adminSlice — trainer list for Assign Trainer dropdown ─────────────────────
 import {
   fetchTrainers,
   selectAdminTrainers,
 } from '../../features/admin/adminSlice';
 
-// ── auth ──────────────────────────────────────────────────────────────────────
 import { selectUserRole } from '../../features/auth/authSlice';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -53,6 +50,8 @@ const EMPTY_FORM = {
   startDate: '', maxStudents: 25, course: '', status: 'upcoming',
 };
 
+const ROWS_OPTIONS = [5, 10, 20, 50];
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // CSS
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -65,31 +64,24 @@ const CSS = `
   @keyframes spin      { to{transform:rotate(360deg)} }
   @keyframes shimmer   { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
 
-  .batch-card { transition:box-shadow .18s,transform .18s; }
-  .batch-card:hover { box-shadow:0 8px 28px rgba(15,23,42,.13)!important; transform:translateY(-2px); }
   .icon-btn { transition:background .15s,transform .15s; border:none; cursor:pointer; }
   .icon-btn:hover { background:#f1f5f9!important; transform:scale(1.08); }
   .del-btn:hover  { background:#fee2e2!important; }
-  .tab-btn { transition:all .15s; border:none; cursor:pointer; }
-  .tab-btn:hover  { background:#f8fafc!important; }
-  .tab-btn.act    { background:#fff!important; color:#0f172a!important; box-shadow:0 1px 3px rgba(0,0,0,.1); }
+  .view-btn:hover { background:#eff6ff!important; }
   .fi { transition:border-color .15s,box-shadow .15s; }
   .fi:focus { outline:none!important; border-color:#6366f1!important; box-shadow:0 0 0 3px rgba(99,102,241,.12)!important; }
   .sbtn { transition:opacity .15s,transform .15s; }
   .sbtn:hover:not(:disabled) { opacity:.88; transform:translateY(-1px); }
   .sbtn:disabled { opacity:.5; cursor:not-allowed; }
-  .shimmer-row {
-    background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%);
-    background-size:400px 100%; animation:shimmer 1.4s infinite;
-    border-radius:10px; height:84px;
-  }
+  .tr-row:hover { background:#f9fafb!important; }
+  .pg-btn { transition:all .15s; cursor:pointer; }
+  .pg-btn:hover:not(:disabled) { background:#f1f5f9!important; }
+  .pg-btn:disabled { opacity:.4; cursor:not-allowed; }
 
-  /* ── MODAL OVERLAY ── */
   .modal-overlay {
     position:fixed; inset:0; background:rgba(15,23,42,.45);
     backdrop-filter:blur(3px); display:flex; align-items:center;
-    justify-content:center; z-index:9999; padding:16px;
-    animation:fadeUp .2s ease;
+    justify-content:center; z-index:9999; padding:16px; animation:fadeUp .2s ease;
   }
   .modal-box {
     background:#fff; border-radius:18px; width:100%; max-width:480px;
@@ -97,12 +89,19 @@ const CSS = `
     box-shadow:0 24px 60px rgba(15,23,42,.22);
     animation:modalIn .25s cubic-bezier(.34,1.3,.64,1);
   }
+
+  /* table responsiveness — progressively hide secondary columns */
+  @media (max-width: 900px) { .col-cap     { display:none!important; } }
+  @media (max-width: 760px) { .col-trainer { display:none!important; } }
+  @media (max-width: 600px) { .col-course  { display:none!important; } }
+  @media (max-width: 480px) { .col-start   { display:none!important; } }
+
   @media (max-width:520px) {
-    .modal-box { padding:20px 16px 18px; border-radius:14px; }
+    .modal-box  { padding:20px 16px 18px; border-radius:14px; }
     .stats-grid { grid-template-columns:repeat(2,1fr)!important; }
-    .batch-grid  { grid-template-columns:1fr!important; }
-    .header-row  { flex-direction:column!important; align-items:flex-start!important; }
-    .search-row  { flex-direction:column!important; }
+    .header-row { flex-direction:column!important; align-items:flex-start!important; }
+    .filter-row { flex-direction:column!important; align-items:stretch!important; }
+    .filter-row > * { width:100%!important; }
   }
 `;
 
@@ -115,7 +114,7 @@ const StatusPill = ({ status }) => {
   return (
     <span style={{ display:'inline-flex', alignItems:'center', gap:4,
       background:c.bg, color:c.color, fontSize:'0.7rem', fontWeight:600,
-      padding:'2px 9px', borderRadius:99 }}>
+      padding:'2px 9px', borderRadius:99, whiteSpace:'nowrap' }}>
       <span style={{ width:5, height:5, borderRadius:'50%', background:c.dot }} />
       {status}
     </span>
@@ -156,123 +155,36 @@ const FSelect = ({ label, req, children, ...p }) => (
   </div>
 );
 
-const Spinner = () => (
-  <div style={{ display:'flex', justifyContent:'center', padding:44 }}>
-    <div style={{ width:24, height:24, borderRadius:'50%',
-      border:'2.5px solid #e2e8f0', borderTopColor:'#6366f1',
-      animation:'spin .7s linear infinite' }} />
+// compact filter <select> for the toolbar (no margin/label wrapper)
+const FilterSelect = ({ value, onChange, children }) => (
+  <div style={{ position:'relative', minWidth:150 }}>
+    <select value={value} onChange={onChange} className="fi"
+      style={{ width:'100%', border:'1.5px solid #e2e8f0', borderRadius:9,
+        padding:'9px 30px 9px 12px', fontSize:'0.82rem', color:'#0f172a',
+        background:'#fff', appearance:'none', WebkitAppearance:'none',
+        cursor:'pointer', fontFamily:'inherit' }}>
+      {children}
+    </select>
+    <span style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)',
+      pointerEvents:'none', color:'#94a3b8', fontSize:'0.7rem' }}>▾</span>
   </div>
 );
 
-// ── Close on backdrop click ────────────────────────────────────────────────────
 const Modal = ({ onClose, children }) => {
-  // Close on Escape key
   useEffect(() => {
     const fn = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', fn);
     return () => window.removeEventListener('keydown', fn);
   }, [onClose]);
-
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" onClick={e => e.stopPropagation()}>
-        {children}
-      </div>
-    </div>
-  );
-};
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// BATCH CARD
-// ═══════════════════════════════════════════════════════════════════════════════
-
-const BatchCard = ({ batch, idx, isAdmin, onEdit, onDelete }) => {
-  const accent   = CARD_ACCENTS[idx % CARD_ACCENTS.length];
-  const initials = (batch.name || 'B').slice(0, 2).toUpperCase();
-  const trainer  = batch.trainerId?.name || '—';
-  const start    = batch.startDate
-    ? new Date(batch.startDate).toLocaleDateString('en-GB',
-        { month: 'short', day: 'numeric', year: 'numeric' })
-    : '—';
-
-  return (
-    <div className="batch-card" style={{ background:'#fff', border:'1px solid #e2e8f0',
-      borderRadius:14, padding:'18px 20px', position:'relative', overflow:'hidden',
-      animation:'fadeUp .3s ease' }}>
-
-      {/* accent bar */}
-      <div style={{ position:'absolute', top:0, left:0, right:0, height:3,
-        background:accent, borderRadius:'14px 14px 0 0' }} />
-
-      <div style={{ display:'flex', alignItems:'flex-start',
-        justifyContent:'space-between', gap:12, marginTop:2 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:11 }}>
-          <div style={{ width:42, height:42, borderRadius:10,
-            background:`${accent}18`, display:'flex', alignItems:'center',
-            justifyContent:'center', fontFamily:'DM Mono,monospace',
-            fontWeight:600, fontSize:'0.82rem', color:accent, flexShrink:0 }}>
-            {initials}
-          </div>
-          <div>
-            <div style={{ fontWeight:700, fontSize:'0.91rem',
-              color:'#0f172a', marginBottom:3 }}>{batch.name}</div>
-            <StatusPill status={batch.status || 'upcoming'} />
-          </div>
-        </div>
-
-        {isAdmin && (
-          <div style={{ display:'flex', gap:4, flexShrink:0 }}>
-            <button className="icon-btn" onClick={() => onEdit(batch)}
-              style={{ width:30, height:30, borderRadius:7, background:'#f8fafc',
-                display:'flex', alignItems:'center', justifyContent:'center',
-                fontSize:'0.8rem' }} title="Edit">✏️</button>
-            <button className="icon-btn del-btn" onClick={() => onDelete(batch)}
-              style={{ width:30, height:30, borderRadius:7, background:'#f8fafc',
-                display:'flex', alignItems:'center', justifyContent:'center',
-                fontSize:'0.8rem' }} title="Delete">🗑️</button>
-          </div>
-        )}
-      </div>
-
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr',
-        gap:'8px 16px', marginTop:14 }}>
-        {[
-          { icon:'🎓', label:'Course',   value: batch.course || '—' },
-          { icon:'👤', label:'Trainer',  value: trainer },
-          { icon:'📅', label:'Starts',   value: start },
-          { icon:'👥', label:'Capacity', value: batch.maxStudents
-              ? `${batch.maxStudents} students` : '—' },
-        ].map(({ icon, label, value }) => (
-          <div key={label}>
-            <div style={{ fontSize:'0.67rem', fontWeight:600, color:'#94a3b8',
-              textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:2 }}>
-              {icon} {label}
-            </div>
-            <div style={{ fontSize:'0.81rem', fontWeight:500, color:'#374151',
-              whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-              {value}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {batch.description && (
-        <div style={{ marginTop:11, fontSize:'0.77rem', color:'#64748b',
-          lineHeight:1.5, borderTop:'1px solid #f1f5f9', paddingTop:10,
-          display:'-webkit-box', WebkitLineClamp:2,
-          WebkitBoxOrient:'vertical', overflow:'hidden' }}>
-          {batch.description}
-        </div>
-      )}
+      <div className="modal-box" onClick={e => e.stopPropagation()}>{children}</div>
     </div>
   );
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // BATCH FORM MODAL
-// Courses loaded from courseSlice (state.courses.courses)
-// Trainers loaded from adminSlice (state.admin.trainers)
-// POST /api/batches  or  PUT /api/batches/:id
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const BatchFormModal = ({ editBatch, trainers, courses, onClose }) => {
@@ -296,7 +208,6 @@ const BatchFormModal = ({ editBatch, trainers, courses, onClose }) => {
     } : { ...EMPTY_FORM }
   );
 
-  // Default course to first option once courses load
   useEffect(() => {
     if (!form.course && courses.length > 0) {
       setForm(f => ({ ...f, course: courses[0].code || courses[0].name || '' }));
@@ -315,11 +226,9 @@ const BatchFormModal = ({ editBatch, trainers, courses, onClose }) => {
       startDate:   form.startDate  || undefined,
       trainerId:   form.trainerId  || undefined,
     };
-
     const result = isEdit
       ? await dispatch(updateBatch({ id: editBatch._id, ...payload }))
       : await dispatch(createBatch(payload));
-
     const action = isEdit ? updateBatch : createBatch;
     if (action.fulfilled.match(result)) {
       toast.success(isEdit ? 'Batch updated!' : 'Batch created!');
@@ -331,12 +240,9 @@ const BatchFormModal = ({ editBatch, trainers, courses, onClose }) => {
 
   return (
     <Modal onClose={onClose}>
-      {/* Modal header */}
-      <div style={{ display:'flex', alignItems:'center',
-        justifyContent:'space-between', marginBottom:22 }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:22 }}>
         <div>
-          <h2 style={{ fontWeight:800, fontSize:'1.05rem',
-            color:'#0f172a', margin:0 }}>
+          <h2 style={{ fontWeight:800, fontSize:'1.05rem', color:'#0f172a', margin:0 }}>
             {isEdit ? '✏️ Edit Batch' : '➕ Add New Batch'}
           </h2>
           <p style={{ fontSize:'0.76rem', color:'#94a3b8', marginTop:3 }}>
@@ -353,7 +259,6 @@ const BatchFormModal = ({ editBatch, trainers, courses, onClose }) => {
         <FInput label="Batch Name" req placeholder="e.g. Batch 2026-A"
           value={form.name} onChange={e => set('name', e.target.value)} />
 
-        {/* ── Course dropdown — from courseSlice ── */}
         <FSelect label="Course" req value={form.course}
           onChange={e => set('course', e.target.value)}>
           <option value="" disabled>
@@ -366,7 +271,6 @@ const BatchFormModal = ({ editBatch, trainers, courses, onClose }) => {
           ))}
         </FSelect>
 
-        {/* ── Assign Trainer — from adminSlice ── */}
         <FSelect label="Assign Trainer" value={form.trainerId}
           onChange={e => set('trainerId', e.target.value)}>
           <option value="">— No trainer yet —</option>
@@ -407,9 +311,8 @@ const BatchFormModal = ({ editBatch, trainers, courses, onClose }) => {
 
         <div style={{ display:'flex', gap:10, marginTop:4 }}>
           <button type="button" onClick={onClose} className="sbtn"
-            style={{ flex:1, padding:'11px', borderRadius:9,
-              border:'1.5px solid #e2e8f0', background:'#fff',
-              color:'#374151', fontWeight:600, fontSize:'0.86rem',
+            style={{ flex:1, padding:'11px', borderRadius:9, border:'1.5px solid #e2e8f0',
+              background:'#fff', color:'#374151', fontWeight:600, fontSize:'0.86rem',
               cursor:'pointer', fontFamily:'inherit' }}>
             Cancel
           </button>
@@ -418,9 +321,7 @@ const BatchFormModal = ({ editBatch, trainers, courses, onClose }) => {
               background: saving ? '#94a3b8' : 'linear-gradient(135deg,#6366f1,#4f46e5)',
               color:'#fff', fontWeight:700, fontSize:'0.86rem',
               cursor: saving ? 'not-allowed' : 'pointer', fontFamily:'inherit' }}>
-            {saving
-              ? (isEdit ? 'Saving…' : 'Creating…')
-              : (isEdit ? 'Save Changes' : 'Create Batch')}
+            {saving ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Batch')}
           </button>
         </div>
       </form>
@@ -446,16 +347,14 @@ const DeleteModal = ({ batch, onConfirm, onClose, deleting }) => (
       </p>
       <div style={{ display:'flex', gap:10 }}>
         <button onClick={onClose} className="sbtn"
-          style={{ flex:1, padding:'11px', borderRadius:9,
-            border:'1.5px solid #e2e8f0', background:'#fff',
-            color:'#374151', fontWeight:600, fontSize:'0.86rem',
+          style={{ flex:1, padding:'11px', borderRadius:9, border:'1.5px solid #e2e8f0',
+            background:'#fff', color:'#374151', fontWeight:600, fontSize:'0.86rem',
             cursor:'pointer', fontFamily:'inherit' }}>
           Cancel
         </button>
         <button onClick={onConfirm} disabled={deleting} className="sbtn"
           style={{ flex:1, padding:'11px', borderRadius:9, border:'none',
-            background:'#dc2626', color:'#fff', fontWeight:700,
-            fontSize:'0.86rem',
+            background:'#dc2626', color:'#fff', fontWeight:700, fontSize:'0.86rem',
             cursor: deleting ? 'not-allowed' : 'pointer', fontFamily:'inherit' }}>
           {deleting ? 'Deleting…' : 'Delete'}
         </button>
@@ -465,54 +364,73 @@ const DeleteModal = ({ batch, onConfirm, onClose, deleting }) => (
 );
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// MAIN PAGE
+// MAIN PAGE  (TABLE)
 // ═══════════════════════════════════════════════════════════════════════════════
+
+const fmtDate = (d) =>
+  d ? new Date(d).toLocaleDateString('en-GB', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
 
 const Batches = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
 
-  // ── Auth ──────────────────────────────────────────────────────────────────
   const role    = useSelector(selectUserRole);
   const isAdmin = role === 'admin';
 
-  // ── Batches ───────────────────────────────────────────────────────────────
-  const batches      = useSelector(selectAllBatches);
+  const batches      = useSelector(selectAllBatches) ?? [];
   const batchStatus  = useSelector(selectBatchesStatus);
   const batchError   = useSelector(selectBatchesError);
   const deleteStatus = useSelector(selectBatchDeleteStatus);
   const deleteError  = useSelector(selectBatchDeleteError);
 
-  // ── Courses from courseSlice ───────────────────────────────────────────────
-  // state.courses.courses — [{_id, name, code, status, ...}]
-  const courses       = useSelector(selectAllCourses);
-  const coursesStatus = useSelector(selectCoursesStatus);
+  const courses  = useSelector(selectAllCourses) ?? [];
+  const trainers = useSelector(selectAdminTrainers) ?? [];
 
-  // ── Trainers from adminSlice ───────────────────────────────────────────────
-  const trainers = useSelector(selectAdminTrainers);
+  // ── Filters ──
+  const [search,        setSearch]        = useState('');
+  const [statusFilter,  setStatusFilter]  = useState('all');
+  const [courseFilter,  setCourseFilter]  = useState('all');
+  const [trainerFilter, setTrainerFilter] = useState('all');
 
-  // ── Local UI ──────────────────────────────────────────────────────────────
-  const [tab,    setTab]    = useState('all');
-  const [search, setSearch] = useState('');
+  // ── Pagination ──
+  const [page, setPage]               = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+
+  // ── Modals ──
   const [modal,  setModal]  = useState(null);   // null | 'add' | 'edit' | 'delete'
   const [target, setTarget] = useState(null);
 
-  // ── Fetch on mount ─────────────────────────────────────────────────────────
   useEffect(() => {
     dispatch(fetchBatches());
-    // Always fetch courses — needed for the form dropdown
     dispatch(fetchCourses());
     if (isAdmin) dispatch(fetchTrainers());
   }, [dispatch, isAdmin]);
 
-  // ── Derived ────────────────────────────────────────────────────────────────
-  const filtered = batches.filter(b => {
-    const matchTab    = tab === 'all' || b.status === tab;
+  // Reset to page 1 whenever any filter changes
+  useEffect(() => { setPage(1); }, [search, statusFilter, courseFilter, trainerFilter, rowsPerPage]);
+
+  // Distinct courses / trainers present in the data, for the filter dropdowns
+  const courseOptions = useMemo(
+    () => Array.from(new Set(batches.map(b => b.course).filter(Boolean))).sort(),
+    [batches]
+  );
+  const trainerOptions = useMemo(
+    () => Array.from(new Set(batches.map(b => b.trainerId?.name).filter(Boolean))).sort(),
+    [batches]
+  );
+
+  // ── Apply all filters ──
+  const filtered = useMemo(() => batches.filter(b => {
+    const q = search.toLowerCase();
     const matchSearch = !search
-      || b.name?.toLowerCase().includes(search.toLowerCase())
-      || b.course?.toLowerCase().includes(search.toLowerCase())
-      || b.trainerId?.name?.toLowerCase().includes(search.toLowerCase());
-    return matchTab && matchSearch;
-  });
+      || b.name?.toLowerCase().includes(q)
+      || b.course?.toLowerCase().includes(q)
+      || b.trainerId?.name?.toLowerCase().includes(q);
+    const matchStatus  = statusFilter  === 'all' || b.status === statusFilter;
+    const matchCourse  = courseFilter  === 'all' || b.course === courseFilter;
+    const matchTrainer = trainerFilter === 'all' || b.trainerId?.name === trainerFilter;
+    return matchSearch && matchStatus && matchCourse && matchTrainer;
+  }), [batches, search, statusFilter, courseFilter, trainerFilter]);
 
   const stats = {
     total:     batches.length,
@@ -521,10 +439,24 @@ const Batches = () => {
     completed: batches.filter(b => b.status === 'completed').length,
   };
 
-  // ── Modal handlers ─────────────────────────────────────────────────────────
-  const openAdd    = ()  => { if (!isAdmin) return; dispatch(clearBatchErrors()); setTarget(null);  setModal('add'); };
-  const openEdit   = (b) => { if (!isAdmin) return; dispatch(clearBatchErrors()); setTarget(b);     setModal('edit'); };
+  // ── Pagination math ──
+  const totalRows  = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalRows / rowsPerPage));
+  const safePage   = Math.min(page, totalPages);
+  const startIdx   = (safePage - 1) * rowsPerPage;
+  const pageRows   = filtered.slice(startIdx, startIdx + rowsPerPage);
+
+  const activeFilters = (statusFilter !== 'all') + (courseFilter !== 'all') + (trainerFilter !== 'all') + (search ? 1 : 0);
+
+  const resetFilters = () => {
+    setSearch(''); setStatusFilter('all'); setCourseFilter('all'); setTrainerFilter('all');
+  };
+
+  // ── Modal / action handlers ──
+  const openAdd    = ()  => { if (!isAdmin) return; dispatch(clearBatchErrors()); setTarget(null); setModal('add'); };
+  const openEdit   = (b) => { if (!isAdmin) return; dispatch(clearBatchErrors()); setTarget(b);    setModal('edit'); };
   const openDelete = (b) => { if (!isAdmin) return; setTarget(b); setModal('delete'); };
+  const openView   = (b) => navigate(`/admin/batches/view/${b._id}`);
   const closeModal = ()  => { setModal(null); setTarget(null); dispatch(clearBatchErrors()); };
 
   const handleDelete = async () => {
@@ -538,9 +470,12 @@ const Batches = () => {
     }
   };
 
-  const TABS = isAdmin
-    ? ['all', 'active', 'upcoming', 'completed', 'cancelled']
-    : ['all', 'active', 'upcoming', 'completed'];
+  const th = {
+    textAlign:'left', padding:'11px 14px', fontSize:'0.67rem', fontWeight:700,
+    color:'#64748b', textTransform:'uppercase', letterSpacing:'0.6px',
+    borderBottom:'1px solid #e2e8f0', whiteSpace:'nowrap', background:'#f8fafc',
+  };
+  const td = { padding:'11px 14px', fontSize:'0.83rem', color:'#374151', borderBottom:'1px solid #f1f5f9' };
 
   return (
     <div style={{ minHeight:'100vh', background:'#f8fafc',
@@ -551,7 +486,7 @@ const Batches = () => {
 
         {/* ── HEADER ── */}
         <div className="header-row" style={{ display:'flex', alignItems:'flex-start',
-          justifyContent:'space-between', flexWrap:'wrap', gap:14, marginBottom:26 }}>
+          justifyContent:'space-between', flexWrap:'wrap', gap:14, marginBottom:22 }}>
           <div>
             <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:4 }}>
               <h1 style={{ fontSize:'1.5rem', fontWeight:800, color:'#0f172a',
@@ -561,42 +496,28 @@ const Batches = () => {
               {!isAdmin && (
                 <span style={{ fontSize:'0.67rem', fontWeight:700, padding:'2px 8px',
                   borderRadius:99, background:'#f1f5f9', color:'#64748b',
-                  letterSpacing:'0.5px', textTransform:'uppercase' }}>
-                  View Only
-                </span>
+                  letterSpacing:'0.5px', textTransform:'uppercase' }}>View Only</span>
               )}
             </div>
             <p style={{ fontSize:'0.83rem', color:'#64748b', margin:0 }}>
-              {isAdmin
-                ? 'Create and manage training batches. Courses pulled from Course Catalogue.'
-                : 'Your assigned training batches.'}
+              {isAdmin ? 'Create, view, edit and manage training batches.' : 'Your assigned training batches.'}
             </p>
           </div>
 
-          <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
-            {!isAdmin && (
-              <div style={{ display:'flex', alignItems:'center', gap:7, padding:'8px 13px',
-                background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:9,
-                fontSize:'0.77rem', color:'#0369a1', fontWeight:500 }}>
-                🔒 Read-only
-              </div>
-            )}
-            {isAdmin && (
-              <button onClick={openAdd}
-                style={{ display:'flex', alignItems:'center', gap:6, padding:'10px 18px',
-                  borderRadius:9, border:'none',
-                  background:'linear-gradient(135deg,#6366f1,#4f46e5)',
-                  color:'#fff', fontWeight:700, fontSize:'0.84rem', cursor:'pointer',
-                  boxShadow:'0 2px 8px rgba(99,102,241,.35)', fontFamily:'inherit' }}>
-                + Add Batch
-              </button>
-            )}
-          </div>
+          {isAdmin && (
+            <button onClick={openAdd}
+              style={{ display:'flex', alignItems:'center', gap:6, padding:'10px 18px',
+                borderRadius:9, border:'none', background:'linear-gradient(135deg,#6366f1,#4f46e5)',
+                color:'#fff', fontWeight:700, fontSize:'0.84rem', cursor:'pointer',
+                boxShadow:'0 2px 8px rgba(99,102,241,.35)', fontFamily:'inherit' }}>
+              + Add Batch
+            </button>
+          )}
         </div>
 
         {/* ── STATS ── */}
         <div className="stats-grid" style={{ display:'grid',
-          gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:22 }}>
+          gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:18 }}>
           {[
             { label: isAdmin ? 'Total' : 'My Batches', value:stats.total,     color:'#6366f1', bg:'#eef2ff' },
             { label:'Active',                           value:stats.active,    color:'#15803d', bg:'#f0fdf4' },
@@ -616,75 +537,197 @@ const Batches = () => {
           ))}
         </div>
 
-        {/* ── SEARCH + TABS ── */}
-        <div className="search-row" style={{ display:'flex', alignItems:'center',
-          gap:12, flexWrap:'wrap', marginBottom:16 }}>
-          <div style={{ position:'relative', flex:1, minWidth:180 }}>
+        {/* ── FILTER BAR (multiple filters) ── */}
+        <div className="filter-row" style={{ display:'flex', alignItems:'center',
+          gap:10, flexWrap:'wrap', marginBottom:16 }}>
+          <div style={{ position:'relative', flex:1, minWidth:200 }}>
             <span style={{ position:'absolute', left:11, top:'50%',
               transform:'translateY(-50%)', fontSize:'0.85rem', color:'#94a3b8' }}>🔍</span>
             <input value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Search by name, course, trainer…" className="fi"
+              placeholder="Search name, course, trainer…" className="fi"
               style={{ width:'100%', border:'1.5px solid #e2e8f0', borderRadius:9,
                 padding:'9px 12px 9px 34px', fontSize:'0.83rem', color:'#0f172a',
                 background:'#fff', fontFamily:'inherit' }} />
           </div>
-          <div style={{ display:'flex', background:'#f1f5f9', borderRadius:9, padding:3, gap:2 }}>
-            {TABS.map(t => (
-              <button key={t} className={`tab-btn ${tab === t ? 'act' : ''}`}
-                onClick={() => setTab(t)}
-                style={{ padding:'6px 12px', borderRadius:7, fontSize:'0.77rem',
-                  fontWeight:600, color: tab === t ? '#0f172a' : '#64748b',
-                  background:'transparent', fontFamily:'inherit',
-                  textTransform:'capitalize' }}>
-                {t}
-              </button>
-            ))}
-          </div>
+
+          <FilterSelect value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+            <option value="all">All statuses</option>
+            {BATCH_STATUSES.map(s => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
+          </FilterSelect>
+
+          <FilterSelect value={courseFilter} onChange={e => setCourseFilter(e.target.value)}>
+            <option value="all">All courses</option>
+            {courseOptions.map(c => <option key={c} value={c}>{c}</option>)}
+          </FilterSelect>
+
+          <FilterSelect value={trainerFilter} onChange={e => setTrainerFilter(e.target.value)}>
+            <option value="all">All trainers</option>
+            {trainerOptions.map(t => <option key={t} value={t}>{t}</option>)}
+          </FilterSelect>
+
+          {activeFilters > 0 && (
+            <button onClick={resetFilters} className="sbtn"
+              style={{ padding:'9px 14px', borderRadius:9, border:'1.5px solid #fecaca',
+                background:'#fef2f2', color:'#dc2626', fontWeight:600, fontSize:'0.8rem',
+                cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>
+              ✕ Clear ({activeFilters})
+            </button>
+          )}
         </div>
 
         {/* ── ERROR ── */}
         {batchError && batchStatus === 'failed' && (
           <div style={{ background:'#fef2f2', border:'1px solid #fecaca',
             borderRadius:9, padding:'10px 14px', fontSize:'0.79rem',
-            color:'#b91c1c', marginBottom:14 }}>
-            ⚠️ {batchError}
-          </div>
+            color:'#b91c1c', marginBottom:14 }}>⚠️ {batchError}</div>
         )}
 
-        {/* ── LOADING ── */}
-        {batchStatus === 'loading' && (
-          <div className="batch-grid" style={{ display:'grid',
-            gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:14 }}>
-            {[1,2,3,4,5,6].map(i => <div key={i} className="shimmer-row" />)}
+        {/* ── TABLE CARD ── */}
+        <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:14, overflow:'hidden' }}>
+          <div style={{ overflowX:'auto' }}>
+            <table style={{ width:'100%', borderCollapse:'collapse', minWidth:640 }}>
+              <thead>
+                <tr>
+                  <th style={th}>#</th>
+                  <th style={th}>Batch</th>
+                  <th style={th} className="col-course">Course</th>
+                  <th style={th} className="col-trainer">Trainer</th>
+                  <th style={th} className="col-start">Starts</th>
+                  <th style={th} className="col-cap">Capacity</th>
+                  <th style={th}>Status</th>
+                  <th style={{ ...th, textAlign:'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {batchStatus === 'loading' ? (
+                  <tr><td colSpan={8} style={{ padding:0 }}>
+                    <div style={{ height:240, background:'linear-gradient(90deg,#f8fafc 25%,#eef2f7 50%,#f8fafc 75%)',
+                      backgroundSize:'400px 100%', animation:'shimmer 1.4s infinite' }} />
+                  </td></tr>
+                ) : pageRows.length === 0 ? (
+                  <tr><td colSpan={8} style={{ textAlign:'center', padding:'52px 20px', color:'#94a3b8' }}>
+                    <div style={{ fontSize:'2.6rem', marginBottom:10 }}>📦</div>
+                    <div style={{ fontWeight:700, fontSize:'0.92rem', marginBottom:5 }}>
+                      {activeFilters > 0 ? 'No batches match your filters' : 'No batches found'}
+                    </div>
+                    <div style={{ fontSize:'0.8rem' }}>
+                      {isAdmin && activeFilters === 0 ? 'Click "+ Add Batch" to create one.' : 'Try adjusting your filters.'}
+                    </div>
+                  </td></tr>
+                ) : (
+                  pageRows.map((b, i) => {
+                    const accent = CARD_ACCENTS[(startIdx + i) % CARD_ACCENTS.length];
+                    return (
+                      <tr key={b._id} className="tr-row" style={{ transition:'background .12s' }}>
+                        <td style={{ ...td, color:'#94a3b8', width:40 }}>{startIdx + i + 1}</td>
+                        <td style={td}>
+                          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                            <div style={{ width:34, height:34, borderRadius:8, flexShrink:0,
+                              background:`${accent}18`, color:accent, display:'flex',
+                              alignItems:'center', justifyContent:'center', fontWeight:700,
+                              fontSize:'0.74rem', fontFamily:'DM Mono,monospace' }}>
+                              {(b.name || 'B').slice(0, 2).toUpperCase()}
+                            </div>
+                            <div style={{ minWidth:0 }}>
+                              <div style={{ fontWeight:700, color:'#0f172a', fontSize:'0.85rem',
+                                whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:200 }}>
+                                {b.name}
+                              </div>
+                              {b.description && (
+                                <div style={{ fontSize:'0.72rem', color:'#94a3b8', whiteSpace:'nowrap',
+                                  overflow:'hidden', textOverflow:'ellipsis', maxWidth:200 }}>
+                                  {b.description}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td style={td} className="col-course">{b.course || '—'}</td>
+                        <td style={td} className="col-trainer">{b.trainerId?.name || '—'}</td>
+                        <td style={td} className="col-start">{fmtDate(b.startDate)}</td>
+                        <td style={td} className="col-cap">{b.maxStudents ? `${b.maxStudents}` : '—'}</td>
+                        <td style={td}><StatusPill status={b.status || 'upcoming'} /></td>
+                        <td style={{ ...td }}>
+                          <div style={{ display:'flex', gap:5, justifyContent:'flex-end' }}>
+                            <button className="icon-btn view-btn" title="View" onClick={() => openView(b)}
+                              style={{ width:30, height:30, borderRadius:7, background:'#f8fafc',
+                                display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.82rem' }}>👁️</button>
+                            {isAdmin && (
+                              <>
+                                <button className="icon-btn" title="Edit" onClick={() => openEdit(b)}
+                                  style={{ width:30, height:30, borderRadius:7, background:'#f8fafc',
+                                    display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.8rem' }}>✏️</button>
+                                <button className="icon-btn del-btn" title="Delete" onClick={() => openDelete(b)}
+                                  style={{ width:30, height:30, borderRadius:7, background:'#f8fafc',
+                                    display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.8rem' }}>🗑️</button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
-        )}
 
-        {/* ── GRID ── */}
-        {batchStatus !== 'loading' && filtered.length > 0 && (
-          <div className="batch-grid" style={{ display:'grid',
-            gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:14 }}>
-            {filtered.map((b, i) => (
-              <BatchCard key={b._id} batch={b} idx={i}
-                isAdmin={isAdmin} onEdit={openEdit} onDelete={openDelete} />
-            ))}
-          </div>
-        )}
+          {/* ── PAGINATOR ── */}
+          {batchStatus !== 'loading' && totalRows > 0 && (
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+              gap:12, padding:'12px 16px', borderTop:'1px solid #e2e8f0', flexWrap:'wrap' }}>
+              <div style={{ fontSize:'0.78rem', color:'#64748b', fontWeight:500 }}>
+                Showing <strong style={{ color:'#0f172a' }}>{startIdx + 1}–{Math.min(startIdx + rowsPerPage, totalRows)}</strong> of <strong style={{ color:'#0f172a' }}>{totalRows}</strong>
+              </div>
 
-        {/* ── EMPTY ── */}
-        {batchStatus !== 'loading' && filtered.length === 0 && (
-          <div style={{ textAlign:'center', padding:'60px 20px', color:'#94a3b8' }}>
-            <div style={{ fontSize:'3rem', marginBottom:12 }}>📦</div>
-            <div style={{ fontWeight:700, fontSize:'0.94rem', marginBottom:6 }}>
-              {search ? 'No batches match your search' : 'No batches found'}
+              <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', justifyContent:'flex-end' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                  <span style={{ fontSize:'0.78rem', color:'#64748b', fontWeight:600 }}>Rows:</span>
+                  <select value={rowsPerPage} onChange={e => setRowsPerPage(Number(e.target.value))} className="fi"
+                    style={{ padding:'6px 8px', borderRadius:7, border:'1.5px solid #e2e8f0',
+                      background:'#fff', fontWeight:700, color:'#0f172a', fontSize:'0.8rem', cursor:'pointer' }}>
+                    {ROWS_OPTIONS.map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+
+                <button className="pg-btn" disabled={safePage <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}
+                  style={{ padding:'7px 12px', borderRadius:7, border:'1px solid #e2e8f0',
+                    background:'#fff', fontSize:'0.8rem', fontWeight:600, color:'#475569', fontFamily:'inherit' }}>
+                  ← Prev
+                </button>
+
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
+                  .map((p, idx, arr) => {
+                    const gap = idx > 0 && p - arr[idx - 1] > 1;
+                    return (
+                      <React.Fragment key={p}>
+                        {gap && <span style={{ color:'#94a3b8', fontSize:'0.8rem' }}>…</span>}
+                        <button onClick={() => setPage(p)}
+                          style={{ minWidth:34, padding:'7px 10px', borderRadius:7,
+                            border:`1px solid ${p === safePage ? '#6366f1' : '#e2e8f0'}`,
+                            background: p === safePage ? '#6366f1' : '#fff',
+                            color: p === safePage ? '#fff' : '#475569',
+                            fontWeight: p === safePage ? 700 : 500, fontSize:'0.8rem',
+                            cursor:'pointer', fontFamily:'inherit' }}>
+                          {p}
+                        </button>
+                      </React.Fragment>
+                    );
+                  })}
+
+                <button className="pg-btn" disabled={safePage >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  style={{ padding:'7px 12px', borderRadius:7, border:'1px solid #e2e8f0',
+                    background:'#fff', fontSize:'0.8rem', fontWeight:600, color:'#475569', fontFamily:'inherit' }}>
+                  Next →
+                </button>
+              </div>
             </div>
-            <div style={{ fontSize:'0.81rem' }}>
-              {isAdmin ? 'Click "+ Add Batch" to create one.' : 'No batches assigned yet.'}
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* ── MODALS ── rendered at root level, centered overlay ── */}
+      {/* ── MODALS ── */}
       {(modal === 'add' || modal === 'edit') && (
         <BatchFormModal
           editBatch={modal === 'edit' ? target : null}

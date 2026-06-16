@@ -1,3 +1,4 @@
+// src/app/store.js
 import { configureStore } from '@reduxjs/toolkit';
 import { persistStore, persistReducer } from 'redux-persist';
 import storage from 'redux-persist/lib/storage';
@@ -8,10 +9,13 @@ import adminReducer       from '../features/admin/adminSlice';
 import hrReducer          from '../features/hr/hrSlice';
 import traineeReducer     from '../features/trainee/traineeSlice';
 import trainerReducer     from '../features/Trainer/trainerSlice';
-import sessionsReducer    from '../features/session/sessionsSlice';
 import assignmentsReducer from '../features/assignment/assignmentsSlice';
-import batchReducer from '../features/session/batchSlice';
-import courseReducer      from '../features/admin/courseSlice';   // ← REQUIRED for Courses page
+import batchReducer       from '../features/session/batchSlice';
+import courseReducer      from '../features/admin/courseSlice';
+
+// Two DIFFERENT slices, two DIFFERENT files, two DIFFERENT keys:
+import sessionsReducer        from '../features/session/sessionsSlice';   // trainer-side (existing)
+import traineeSessionsReducer from '../features/sessions/sessionsSlice';  // trainee-side (new)
 
 // Persist only auth so the user stays logged in on page refresh
 const authPersistConfig = {
@@ -21,15 +25,16 @@ const authPersistConfig = {
 };
 
 const rootReducer = combineReducers({
-  auth:        persistReducer(authPersistConfig, authReducer),
-  admin:       adminReducer,
-  hr:          hrReducer,
-  trainee:     traineeReducer,
-  trainer:     trainerReducer,
-  sessions:    sessionsReducer,
-  assignments: assignmentsReducer,
-  batches: batchReducer,
-    courses:     courseReducer,     // ← key 'courses' must match selector: s.courses.*
+  auth:            persistReducer(authPersistConfig, authReducer),
+  admin:           adminReducer,
+  hr:              hrReducer,
+  trainee:         traineeReducer,
+  trainer:         trainerReducer,
+  sessions:        sessionsReducer,         // ← trainer slice  -> selectors read s.sessions.*
+  traineeSessions: traineeSessionsReducer,  // ← trainee slice  -> selectors read s.traineeSessions.*
+  assignments:     assignmentsReducer,
+  batches:         batchReducer,
+  courses:         courseReducer,
 });
 
 export const store = configureStore({
@@ -37,7 +42,6 @@ export const store = configureStore({
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
-        // redux-persist actions are non-serializable — ignore them
         ignoredActions: ['persist/PERSIST', 'persist/REHYDRATE', 'persist/PURGE'],
       },
     }),

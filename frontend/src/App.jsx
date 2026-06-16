@@ -41,8 +41,6 @@ import CourseSegment from './pages/trainee/CourseSegment';
 import LessonPlayer from './pages/trainee/LessonPlayer';
 import CourseTopic from './pages/trainee/CourseTopic';
 
-import AdminPipeline from './pages/admin/Pipeline';
-import AdminInterviews from './pages/admin/Interviews';
 
 
 import WhatsAppButton from "./pages/WhatsAppButton";
@@ -137,6 +135,7 @@ function App() {
             <Route path="profile" element={<Profile />} />
             <Route path="courses/:id" element={<CourseDetail />} />
             <Route path="courses/:id/edit" element={<CourseCurriculumEditor/>} />
+           <Route path="batches/view/:id" element={<BatchDetails />} />
             <Route index element={<Navigate to="dashboard" replace />} />
 
 
@@ -180,6 +179,9 @@ function App() {
               <Route path="coursess/:courseId/segment/:segmentId" element={<CourseSegment />} />
               <Route path="coursess/:courseId/segment/:segmentId/:topicId" element={<CourseTopic />} />
               <Route path="coursess/:courseId/segment/:segmentId/:topicId/:lessonId" element={<LessonPlayer />} />
+              
+
+
               
             <Route index element={<Navigate to="dashboard" replace />} />
           </Route>

@@ -1,5 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import axios from 'axios';
+
+// ── LiveKit (third-party real-time video) ─────────────────────────────────────
+import { LiveKitRoom, VideoConference } from '@livekit/components-react';
+import '@livekit/components-styles';
 
 import {
   fetchTrainerDashboard,
@@ -29,6 +34,14 @@ import {
 } from '../../features/Trainer/trainerSlice';
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const API         = '';                                  // empty → "/api/..." goes through the proxy
+const LIVEKIT_URL = process.env.REACT_APP_LIVEKIT_URL || '';
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -47,7 +60,6 @@ const fmtDate = (iso) =>
 
 const scoreCol = (n) => n >= 75 ? '#16a34a' : n >= 55 ? '#d97706' : '#dc2626';
 
-// A session is "past" (read-only) if its start time is before now, or it's completed.
 const isPastSession = (s, isLive = false) => {
   if (isLive || s.status === 'live' || s.status === 'ongoing') return false;
   if (s.status === 'completed' || s.status === 'cancelled' || s.status === 'ended') return true;
@@ -59,13 +71,9 @@ const isPastSession = (s, isLive = false) => {
 
 const clampPct = (n) => Math.min(100, Math.max(0, Math.round(Number(n) || 0)));
 
-// Build the batch list from BOTH the trainer's assigned batches (so every batch
-// shows, even with no sessions yet) and any sessions (for live counts).
 const buildBatches = (explicitBatches = [], sessions = [], batchStats = {}) => {
   const map = {};
   const keyOf = (b) => b._id || b.id || b.batchId || b.code || b.name;
-
-  // 1) Seed from explicitly-assigned batches.
   explicitBatches.forEach((b) => {
     const id   = keyOf(b) || 'unknown';
     const name = b.name || b.batchName || b.code || 'Batch';
@@ -78,20 +86,28 @@ const buildBatches = (explicitBatches = [], sessions = [], batchStats = {}) => {
       phase: b.phase || b.currentModule || b.module || (batchStats[id] || {}).phase,
     };
   });
-
-  // 2) Fold in sessions (adds counts + any batch only seen via a session).
   sessions.forEach((s) => {
     const id   = s.batchId?._id || s.batchId || 'unknown';
     const name = s.batchId?.name || map[id]?.name || 'Unknown Batch';
     if (!map[id]) map[id] = { id, name, sessions: [], ...(batchStats[id] || {}) };
     map[id].sessions.push(s);
   });
-
   return Object.values(map);
+};
+
+// Stable LiveKit identity per (room,user) so a refresh rejoins instead of spawning a ghost.
+const livekitIdentity = (room, base) => {
+  const safe = String(base || 'trainer').replace(/\s+/g, '-');
+  const key  = `lk:${room}:${safe}`;
+  let id = sessionStorage.getItem(key);
+  if (!id) { id = `${safe}-${Date.now()}`; sessionStorage.setItem(key, id); }
+  return id;
 };
 
 const COLORS = ['#7c3aed', '#0891b2', '#059669', '#d97706', '#dc2626'];
 const LIGHTS = ['#ede9fe', '#ecfeff', '#dcfce7', '#fef9c3', '#fee2e2'];
+
+const PAGE_SIZE = 8;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // GLOBAL CSS
@@ -114,21 +130,32 @@ const CSS = `
     border-color: #6366f1 !important;
     box-shadow: 0 0 0 3px rgba(99,102,241,.15) !important;
   }
-
-  /* Tabs never wrap; scroll sideways if cramped */
   .td-tabs { -ms-overflow-style: none; scrollbar-width: none; }
   .td-tabs::-webkit-scrollbar { display: none; }
   .td-tabs button { flex: 0 0 auto; white-space: nowrap; }
+  .td-trainees { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+  .td-pager { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 22px; flex-wrap: wrap; }
+
+  /* LiveKit room overlay */
+  .lk-overlay { position: fixed; inset: 0; z-index: 2000; background: #0b0d12; display: flex; flex-direction: column; }
+  .lk-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; background: #111827; color: #fff; flex-shrink: 0; }
+  .lk-stage { flex: 1; min-height: 0; }
+  .lk-leave { background: #dc2626; color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-size: 0.82rem; font-weight: 700; cursor: pointer; }
 
   @media (max-width: 1024px) { .td-g3 { grid-template-columns: 1fr 1fr !important; } }
   @media (max-width:  680px) { .td-g3 { grid-template-columns: 1fr       !important; } }
-
-  /* Mobile polish */
   @media (max-width: 768px) {
-    .td-wrap  { padding: 20px 14px !important; }
-    .td-h1    { font-size: 1.35rem !important; }
-    .td-tabs  { overflow-x: auto; }
-    .td-modal { padding: 20px 18px !important; }
+    .td-wrap     { padding: 20px 14px !important; }
+    .td-h1       { font-size: 1.35rem !important; }
+    .td-tabs     { overflow-x: auto; }
+    .td-modal    { padding: 20px 18px !important; }
+    .td-trainees { grid-template-columns: 1fr 1fr !important; }
+  }
+  @media (max-width: 480px) {
+    .td-trainees { grid-template-columns: 1fr !important; }
+    .td-pager button { min-width: 30px; padding: 6px 8px !important; font-size: 0.74rem !important; }
+    .td-detail-head { flex-direction: column !important; align-items: flex-start !important; }
+    .td-detail-head .td-detail-pills { margin-left: 0 !important; }
   }
 `;
 
@@ -147,11 +174,11 @@ const Pill = ({ children, bg = '#dcfce7', color = '#15803d', dot = false }) => (
   </span>
 );
 
-const Spinner = ({ pad = 40 }) => (
+const Spinner = ({ pad = 40, color = '#6366f1' }) => (
   <div style={{ display: 'flex', justifyContent: 'center', padding: pad }}>
     <div style={{
       width: 28, height: 28, borderRadius: '50%',
-      border: '3px solid #e5e7eb', borderTopColor: '#6366f1',
+      border: '3px solid #e5e7eb', borderTopColor: color,
       animation: 'spin .7s linear infinite',
     }} />
   </div>
@@ -181,6 +208,110 @@ const FieldLbl = ({ children }) => (
     {children}
   </div>
 );
+
+const pgBtn = (disabled) => ({
+  padding: '7px 12px', borderRadius: 8, border: '1px solid #e5e7eb',
+  background: disabled ? '#f9fafb' : '#fff',
+  color: disabled ? '#d1d5db' : '#6b7280',
+  fontWeight: 600, fontSize: '0.8rem',
+  cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LIVE ROOM  (LiveKit) — fetches a token for the session room, renders the call
+//   isHost      → shows the red "End session" button (stops the recording)
+//   onEndSession → called when the host ends the meeting for everyone
+//   onClose     → "Leave" — just closes the overlay; recording keeps running
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const LiveRoom = ({ session, isHost = false, onClose, onEndSession }) => {
+  const dashboard   = useSelector(selectTrainerDashboard);
+  const authToken   = useSelector((s) => s?.auth?.token);
+  const trainerName = dashboard?.trainer?.name ?? dashboard?.trainerName ?? 'Trainer';
+
+  // IMPORTANT: room MUST equal session._id — the backend starts egress on this exact
+  // room name, so the token, the room everyone joins, and the recording all line up.
+  const room = session._id || session.id;
+
+  const [token, setToken] = useState(null);
+  const [url,   setUrl]   = useState(LIVEKIT_URL);
+  const [err,   setErr]   = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const identity = livekitIdentity(room, trainerName);
+        const { data } = await axios.post(
+          `/api/livekit/token`,                    // relative — proxied to :8080, no CORS
+          { room, identity, name: trainerName },   // role defaults to 'trainer' (canPublish) on the server
+          authToken ? { headers: { Authorization: `Bearer ${authToken}` } } : undefined
+        );
+        if (cancelled) return;
+        const payload = data?.data ?? data;
+        setToken(payload.token);
+        setUrl(payload.url || payload.serverUrl || LIVEKIT_URL);
+      } catch (e) {
+        if (!cancelled) setErr(e?.response?.data?.message || e.message || 'Failed to start the live session.');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [room, trainerName, authToken]);
+
+  return (
+    <div className="lk-overlay">
+      <div className="lk-bar">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', animation: 'pulse 1s infinite', flexShrink: 0 }} />
+          <span style={{ fontWeight: 700, fontSize: '0.92rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {session.title || 'Live Session'}
+          </span>
+          {session.batchId?.name && (
+            <span style={{ fontSize: '0.76rem', color: '#9ca3af', whiteSpace: 'nowrap' }}>· {session.batchId.name}</span>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          {isHost && onEndSession && (
+            <button className="lk-leave" style={{ background: '#b91c1c' }} onClick={onEndSession}>
+              End session
+            </button>
+          )}
+          <button className="lk-leave" style={{ background: '#374151' }} onClick={onClose}>
+            Leave
+          </button>
+        </div>
+      </div>
+
+      <div className="lk-stage">
+        {err ? (
+          <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#fca5a5', gap: 10, padding: 24, textAlign: 'center' }}>
+            <div style={{ fontSize: '2rem' }}>⚠️</div>
+            <div style={{ fontWeight: 600 }}>{err}</div>
+            <button className="lk-leave" style={{ background: '#374151', marginTop: 8 }} onClick={onClose}>Close</button>
+          </div>
+        ) : !token ? (
+          <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', gap: 12 }}>
+            <Spinner color="#fff" pad={0} />
+            <div style={{ fontSize: '0.85rem' }}>Connecting to the live room…</div>
+          </div>
+        ) : (
+          <LiveKitRoom
+            token={token}
+            serverUrl={url}
+            connect={true}
+            video={true}
+            audio={true}
+            onDisconnected={onClose}
+            data-lk-theme="default"
+            style={{ height: '100%' }}
+          >
+            <VideoConference />
+          </LiveKitRoom>
+        )}
+      </div>
+    </div>
+  );
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // BATCH CARD
@@ -220,20 +351,54 @@ const BatchCard = ({ batch, idx }) => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SESSION CARD  (past sessions render read-only)
+// SESSION CARD  — Start calls the API (creates room + recording), then opens the room
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const SessionCard = ({ session, isLive }) => {
   const dispatch    = useDispatch();
-  const [open, setOpen] = useState(false);
+  const authToken   = useSelector((s) => s?.auth?.token);
+  const [open, setOpen]         = useState(false);
+  const [live, setLive]         = useState(false);   // ← LiveKit room overlay open?
+  const [starting, setStarting] = useState(false);
+  const [actErr, setActErr]     = useState(null);
+
   const allAtt     = useSelector(selectAttendance);
   const allAttSt   = useSelector(selectAttendanceStatus);
   const att        = allAtt[session._id];
   const attLoading = allAttSt[session._id] === 'loading';
 
-  const records  = att?.records || att?.data?.records || [];
-  const past     = isPastSession(session, isLive);            // ← read-only when in the past
+  const records   = att?.records || att?.data?.records || [];
+  const past      = isPastSession(session, isLive);
   const completed = session.status === 'completed';
+
+  const authCfg = authToken ? { headers: { Authorization: `Bearer ${authToken}` } } : undefined;
+
+  // ── Start: tell the SERVER to create the room + start egress, THEN open the call ──
+  const handleStart = async () => {
+    setStarting(true);
+    setActErr(null);
+    try {
+      await axios.post(`/api/sessions/${session._id}/start`, {}, authCfg);
+      dispatch(fetchTrainerSessions());   // refresh → status flips to 'live'
+      setLive(true);                       // open the LiveKit overlay
+    } catch (e) {
+      setActErr(e?.response?.data?.message || e.message || 'Could not start the session.');
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  // ── End (host only): stop egress → webhook fills recordingUrl ──
+  const handleEnd = async () => {
+    try {
+      await axios.post(`/api/sessions/${session._id}/end`, {}, authCfg);
+    } catch (e) {
+      setActErr(e?.response?.data?.message || e.message || 'Could not end the session.');
+    } finally {
+      setLive(false);
+      dispatch(fetchTrainerSessions());
+    }
+  };
 
   const toggleAttendance = () => {
     if (!open && !att) dispatch(fetchSessionAttendance(session._id));
@@ -253,7 +418,6 @@ const SessionCard = ({ session, isLive }) => {
       borderRadius: 10, padding: '14px 16px', marginBottom: 10,
       transition: 'box-shadow .15s', opacity: past ? 0.92 : 1,
     }}>
-      {/* Title + read-only tag */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
         <span style={{ fontWeight: 600, fontSize: '0.93rem', color: '#111827' }}>
           {session.title || 'Untitled Session'}
@@ -263,23 +427,33 @@ const SessionCard = ({ session, isLive }) => {
 
       <div style={{ fontSize: '0.78rem', color: '#6b7280', marginBottom: 10 }}>{meta}</div>
 
-      {/* Action buttons */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-
-        {/* Primary action */}
         {isLive ? (
-          <button style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '7px 16px', borderRadius: 7, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button
+            onClick={() => setLive(true)}
+            style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '7px 16px', borderRadius: 7, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#fff', animation: 'pulse 1s infinite' }} />
             Join Live
           </button>
         ) : past ? (
-          /* Past → read-only, no start/join */
-          <span style={{ background: '#f1f5f9', color: '#64748b', border: '1px solid #e5e7eb', padding: '6px 14px', borderRadius: 7, fontSize: '0.78rem', fontWeight: 600 }}>
-            {completed ? 'Completed' : 'Ended'}
-          </span>
+          <>
+            <span style={{ background: '#f1f5f9', color: '#64748b', border: '1px solid #e5e7eb', padding: '6px 14px', borderRadius: 7, fontSize: '0.78rem', fontWeight: 600 }}>
+              {completed ? 'Completed' : 'Ended'}
+            </span>
+            {session.recordingUrl && (
+              <a
+                href={session.recordingUrl} target="_blank" rel="noreferrer"
+                style={{ background: '#1e293b', color: '#fff', textDecoration: 'none', padding: '6px 14px', borderRadius: 7, fontSize: '0.78rem', fontWeight: 600 }}>
+                ▶ Watch recording
+              </a>
+            )}
+          </>
         ) : session.status === 'scheduled' ? (
-          <button style={{ background: '#1e293b', color: '#fff', border: 'none', padding: '7px 18px', borderRadius: 7, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}>
-            Start Session
+          <button
+            onClick={handleStart}
+            disabled={starting}
+            style={{ background: starting ? '#475569' : '#1e293b', color: '#fff', border: 'none', padding: '7px 18px', borderRadius: 7, fontSize: '0.78rem', fontWeight: 600, cursor: starting ? 'wait' : 'pointer' }}>
+            {starting ? 'Starting…' : 'Start Session'}
           </button>
         ) : (
           <button style={{ background: '#fff', color: '#6b7280', border: '1px solid #e5e7eb', padding: '6px 14px', borderRadius: 7, fontSize: '0.78rem', fontWeight: 500, cursor: 'default' }}>
@@ -287,7 +461,6 @@ const SessionCard = ({ session, isLive }) => {
           </button>
         )}
 
-        {/* Attendance toggle (view-only for past sessions, still allowed) */}
         <button
           onClick={toggleAttendance}
           style={{ background: '#fff', color: '#6366f1', border: '1px solid #e0e7ff', padding: '6px 12px', borderRadius: 7, fontSize: '0.73rem', fontWeight: 600, cursor: 'pointer' }}
@@ -296,7 +469,12 @@ const SessionCard = ({ session, isLive }) => {
         </button>
       </div>
 
-      {/* Attendance panel */}
+      {actErr && (
+        <div style={{ marginTop: 10, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 12px', fontSize: '0.74rem', color: '#b91c1c' }}>
+          ⚠️ {actErr}
+        </div>
+      )}
+
       {open && (
         <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f1f5f9' }}>
           {attLoading ? (
@@ -321,6 +499,16 @@ const SessionCard = ({ session, isLive }) => {
             </div>
           )}
         </div>
+      )}
+
+      {/* LiveKit room overlay — host gets the End button that stops recording */}
+      {live && (
+        <LiveRoom
+          session={session}
+          isHost
+          onClose={() => setLive(false)}
+          onEndSession={handleEnd}
+        />
       )}
     </div>
   );
@@ -360,7 +548,6 @@ const GradingModal = () => {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div className="td-modal" style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 480, padding: '26px 26px 22px', boxShadow: '0 20px 60px rgba(0,0,0,.18)', maxHeight: '90vh', overflowY: 'auto' }}>
-
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
           <span style={{ fontWeight: 700, fontSize: '1rem', color: '#111827' }}>Grade Submission</span>
           <button onClick={() => dispatch(closeGradingModal())} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: '#9ca3af', lineHeight: 1, padding: 4 }}>✕</button>
@@ -500,15 +687,9 @@ const Leaderboard = ({ students }) => {
         <tbody>
           {rows.map(r => (
             <tr key={r.rank} style={{ borderBottom: '1px solid #f9fafb' }}>
-              <td style={{ padding: '11px 10px', fontSize: '0.82rem', fontWeight: 700, color: rankColor[r.rank] || '#9ca3af', width: 28 }}>
-                {r.rank}
-              </td>
-              <td style={{ padding: '11px 10px', fontSize: '0.85rem', fontWeight: 500, color: '#111827' }}>
-                {r.name}
-              </td>
-              <td style={{ padding: '11px 10px', fontSize: '0.9rem', fontWeight: 700, color: scoreCol(r.score) }}>
-                {r.score}
-              </td>
+              <td style={{ padding: '11px 10px', fontSize: '0.82rem', fontWeight: 700, color: rankColor[r.rank] || '#9ca3af', width: 28 }}>{r.rank}</td>
+              <td style={{ padding: '11px 10px', fontSize: '0.85rem', fontWeight: 500, color: '#111827' }}>{r.name}</td>
+              <td style={{ padding: '11px 10px', fontSize: '0.9rem', fontWeight: 700, color: scoreCol(r.score) }}>{r.score}</td>
             </tr>
           ))}
         </tbody>
@@ -537,7 +718,6 @@ const OverviewTab = ({ dashboard, students }) => {
   const dispatch        = useDispatch();
   const trainerSessions = useSelector(selectTrainerSessions);
 
-  // Pull the FULL sessions list so batches without a session today still appear.
   useEffect(() => { dispatch(fetchTrainerSessions()); }, [dispatch]);
 
   const upcoming      = dashboard?.upcomingSessions || [];
@@ -546,7 +726,6 @@ const OverviewTab = ({ dashboard, students }) => {
   const pendingGrades = dashboard?.pendingGrades    ?? 0;
   const batchStats    = dashboard?.batchStats       || {};
 
-  // Every batch assigned to the trainer (several backend shapes supported).
   const explicitBatches = [
     dashboard?.batches,
     dashboard?.assignedBatches,
@@ -554,15 +733,12 @@ const OverviewTab = ({ dashboard, students }) => {
     dashboard?.trainer?.batches,
   ].find(Array.isArray) || [];
 
-  // Prefer the full sessions list for counts; fall back to today's.
   const sessionsForBatches = trainerSessions.length ? trainerSessions : allSessions;
   const batches    = buildBatches(explicitBatches, sessionsForBatches, batchStats);
   const firstBatch = batches[0]?.name || dashboard?.batchName || 'Batch';
 
   return (
     <div className="td-g3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 28, alignItems: 'start' }}>
-
-      {/* ── COL 1: My Batches (ALL assigned) ── */}
       <div>
         <H2>My Batches {batches.length > 0 && <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#9ca3af' }}>({batches.length})</span>}</H2>
         {batches.length === 0
@@ -571,7 +747,6 @@ const OverviewTab = ({ dashboard, students }) => {
         }
       </div>
 
-      {/* ── COL 2: Today's Sessions + Grading Queue ── */}
       <div>
         <H2>Today's Sessions</H2>
         {allSessions.length === 0
@@ -604,7 +779,6 @@ const OverviewTab = ({ dashboard, students }) => {
         </div>
       </div>
 
-      {/* ── COL 3: Leaderboard ── */}
       <div>
         <H2>Leaderboard — {firstBatch}</H2>
         <Leaderboard students={students} />
@@ -628,9 +802,7 @@ const SessionsTab = () => {
   if (!sessions.length)     return <Empty icon="📅" msg="No sessions found" />;
 
   const live = sessions.filter(s => s.status === 'live' || s.status === 'ongoing');
-  // Upcoming = scheduled AND not in the past.
   const upcoming = sessions.filter(s => (s.status === 'scheduled' || s.status === 'upcoming') && !isPastSession(s));
-  // Past = completed/cancelled OR scheduled-but-overdue (rendered read-only).
   const pastList = sessions.filter(s => !live.includes(s) && !upcoming.includes(s));
 
   return (
@@ -691,23 +863,112 @@ const AssignmentsTab = () => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// STUDENTS TAB  — full trainee list
+// TRAINEE DETAIL
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const TraineeDetail = ({ trainee, onBack, idx = 0 }) => {
+  if (!trainee) return null;
+
+  const c = COLORS[idx % COLORS.length];
+  const l = LIGHTS[idx % LIGHTS.length];
+
+  const score     = trainee.averageScore ?? trainee.score ?? null;
+  const batchName = trainee.batchId?.name || (typeof trainee.batchId === 'string' ? trainee.batchId : null);
+  const ready     = trainee.placementStatus === 'ready' || trainee.isPlacementReady;
+
+  const facts = [
+    ['Email',            trainee.email],
+    ['Phone',            trainee.phone || trainee.mobile],
+    ['Batch',            batchName],
+    ['Average Score',    score != null ? score : null],
+    ['Attendance',       trainee.attendance != null ? `${trainee.attendance}%` : null],
+    ['Assignments Done', trainee.assignmentsCompleted ?? trainee.completedAssignments],
+    ['Joined',           trainee.joinedAt ? fmtDate(trainee.joinedAt) : null],
+    ['Status',           trainee.status],
+  ].filter(([, v]) => v != null && v !== '');
+
+  return (
+    <div style={{ animation: 'fadeUp .25s ease' }}>
+      <button
+        onClick={onBack}
+        className="td-btn"
+        style={{ background: '#fff', color: '#6366f1', border: '1px solid #e0e7ff', padding: '7px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', marginBottom: 20, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+      >
+        ← Back to all trainees
+      </button>
+
+      <div style={{ border: '1px solid #e5e7eb', borderLeft: `4px solid ${c}`, borderRadius: 12, padding: '20px 22px', background: '#fff', marginBottom: 20 }}>
+        <div className="td-detail-head" style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <div style={{ width: 56, height: 56, borderRadius: '50%', background: c, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '1.4rem', color: '#fff', flexShrink: 0 }}>
+            {(trainee.name || 'S')[0].toUpperCase()}
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: '1.15rem', color: '#111827', letterSpacing: '-0.3px' }}>{trainee.name || 'Trainee'}</div>
+            <div style={{ fontSize: '0.8rem', color: '#9ca3af' }}>{trainee.email}</div>
+          </div>
+          <div className="td-detail-pills" style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {batchName && <Pill bg={l} color={c}>{batchName}</Pill>}
+            {score != null && (
+              <Pill bg={score >= 75 ? '#dcfce7' : score >= 55 ? '#fef9c3' : '#fee2e2'} color={scoreCol(score)}>
+                Score {score}
+              </Pill>
+            )}
+            {ready && <Pill bg="#dcfce7" color="#15803d">✓ Placement Ready</Pill>}
+          </div>
+        </div>
+      </div>
+
+      <H2>Details</H2>
+      {facts.length === 0 ? (
+        <Empty icon="📄" msg="No additional details available" />
+      ) : (
+        <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden', background: '#fff' }}>
+          {facts.map(([label, value], i) => (
+            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '12px 18px', borderBottom: i < facts.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+              <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{label}</span>
+              <span style={{ fontSize: '0.85rem', fontWeight: 500, color: '#111827', textAlign: 'right' }}>{String(value)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// STUDENTS TAB
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const StudentsTab = () => {
   const dispatch = useDispatch();
   const students = useSelector(selectTrainerStudents);
   const status   = useSelector(selectStudentsStatus);
-  const [q, setQ] = useState('');
+
+  const [q, setQ]               = useState('');
+  const [page, setPage]         = useState(1);
+  const [selected, setSelected] = useState(null);
+  const [selIdx, setSelIdx]     = useState(0);
 
   useEffect(() => { dispatch(fetchTrainerStudents()); }, [dispatch]);
+  useEffect(() => { setPage(1); }, [q]);
 
   if (status === 'loading') return <Spinner />;
+
+  if (selected) {
+    return <TraineeDetail trainee={selected} idx={selIdx} onBack={() => setSelected(null)} />;
+  }
 
   const list = students.filter(s =>
     (s.name  || '').toLowerCase().includes(q.toLowerCase()) ||
     (s.email || '').toLowerCase().includes(q.toLowerCase())
   );
+
+  const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  const safePage   = Math.min(page, totalPages);
+  const start      = (safePage - 1) * PAGE_SIZE;
+  const pageItems  = list.slice(start, start + PAGE_SIZE);
+
+  const openTrainee = (st, i) => { setSelected(st); setSelIdx(i); };
 
   return (
     <div>
@@ -727,43 +988,71 @@ const StudentsTab = () => {
       ) : list.length === 0 ? (
         <Empty icon="🔍" msg="No trainees match your search" />
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 10 }}>
-          {list.map((st, i) => {
-            const score = st.averageScore ?? st.score ?? null;
-            const c = COLORS[i % COLORS.length];
-            const l = LIGHTS[i % LIGHTS.length];
-            return (
-              <div key={st._id || i} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, background: '#fff' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: c, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.9rem', color: '#fff', flexShrink: 0 }}>
-                    {(st.name || 'S')[0].toUpperCase()}
+        <>
+          <div className="td-trainees">
+            {pageItems.map((st, i) => {
+              const globalIdx = start + i;
+              const score = st.averageScore ?? st.score ?? null;
+              const c = COLORS[globalIdx % COLORS.length];
+              const l = LIGHTS[globalIdx % LIGHTS.length];
+              return (
+                <div
+                  key={st._id || globalIdx}
+                  className="td-card"
+                  onClick={() => openTrainee(st, globalIdx)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && openTrainee(st, globalIdx)}
+                  style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, background: '#fff', cursor: 'pointer', transition: 'box-shadow .15s' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: '50%', background: c, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.9rem', color: '#fff', flexShrink: 0 }}>
+                      {(st.name || 'S')[0].toUpperCase()}
+                    </div>
+                    <div style={{ overflow: 'hidden' }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{st.name}</div>
+                      <div style={{ fontSize: '0.69rem', color: '#9ca3af', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{st.email}</div>
+                    </div>
                   </div>
-                  <div style={{ overflow: 'hidden' }}>
-                    <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{st.name}</div>
-                    <div style={{ fontSize: '0.69rem', color: '#9ca3af', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{st.email}</div>
+                  <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                    {(st.batchId?.name || (typeof st.batchId === 'string' && st.batchId)) && (
+                      <Pill bg={l} color={c}>{st.batchId?.name || st.batchId}</Pill>
+                    )}
+                    {score != null && (
+                      <Pill bg={score >= 75 ? '#dcfce7' : score >= 55 ? '#fef9c3' : '#fee2e2'} color={scoreCol(score)}>
+                        Score {score}
+                      </Pill>
+                    )}
+                    {st.attendance != null && <Pill bg="#f3f4f6" color="#374151">Att {st.attendance}%</Pill>}
+                    {(st.placementStatus === 'ready' || st.isPlacementReady) && (
+                      <Pill bg="#dcfce7" color="#15803d">✓ Placement Ready</Pill>
+                    )}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                  {(st.batchId?.name || (typeof st.batchId === 'string' && st.batchId)) && (
-                    <Pill bg={l} color={c}>{st.batchId?.name || st.batchId}</Pill>
-                  )}
-                  {score != null && (
-                    <Pill
-                      bg={score >= 75 ? '#dcfce7' : score >= 55 ? '#fef9c3' : '#fee2e2'}
-                      color={scoreCol(score)}
-                    >
-                      Score {score}
-                    </Pill>
-                  )}
-                  {st.attendance != null && <Pill bg="#f3f4f6" color="#374151">Att {st.attendance}%</Pill>}
-                  {(st.placementStatus === 'ready' || st.isPlacementReady) && (
-                    <Pill bg="#dcfce7" color="#15803d">✓ Placement Ready</Pill>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="td-pager">
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={safePage === 1} style={pgBtn(safePage === 1)}>← Prev</button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => {
+                const active = n === safePage;
+                return (
+                  <button key={n} onClick={() => setPage(n)}
+                    style={{ minWidth: 34, padding: '7px 10px', borderRadius: 8, border: `1px solid ${active ? '#6366f1' : '#e5e7eb'}`, background: active ? '#6366f1' : '#fff', color: active ? '#fff' : '#6b7280', fontWeight: active ? 700 : 500, fontSize: '0.8rem', cursor: 'pointer', fontFamily: 'inherit', transition: 'all .12s' }}>
+                    {n}
+                  </button>
+                );
+              })}
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages} style={pgBtn(safePage === totalPages)}>Next →</button>
+            </div>
+          )}
+
+          <div style={{ textAlign: 'center', fontSize: '0.72rem', color: '#9ca3af', marginTop: 10 }}>
+            Showing {start + 1}–{Math.min(start + PAGE_SIZE, list.length)} of {list.length}
+          </div>
+        </>
       )}
     </div>
   );
@@ -815,8 +1104,6 @@ const TrainerDashboard = () => {
       <style>{CSS}</style>
 
       <div className="td-wrap" style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 24px' }}>
-
-        {/* ── PAGE HEADER ── */}
         <div style={{ marginBottom: 28, animation: 'fadeUp .35s ease' }}>
           <h1 className="td-h1" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.5px', marginBottom: 7 }}>
             Trainer Dashboard
@@ -838,7 +1125,6 @@ const TrainerDashboard = () => {
           </div>
         </div>
 
-        {/* ── ERROR BANNER ── */}
         {error && status === 'failed' && (
           <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '11px 14px', marginBottom: 20, fontSize: '0.79rem', color: '#b91c1c', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
             <span style={{ flexShrink: 0 }}>⚠️</span>
@@ -846,7 +1132,6 @@ const TrainerDashboard = () => {
           </div>
         )}
 
-        {/* ── UNDERLINE TABS ── */}
         <div className="td-tabs" style={{ display: 'flex', gap: 2, borderBottom: '1px solid #e5e7eb', marginBottom: 28 }}>
           {TABS.map(tab => {
             const active = activeTab === tab.id;
@@ -873,7 +1158,6 @@ const TrainerDashboard = () => {
           })}
         </div>
 
-        {/* ── TAB CONTENT ── */}
         {status === 'loading' && !dashboard ? (
           <Spinner />
         ) : (
@@ -883,7 +1167,6 @@ const TrainerDashboard = () => {
         )}
       </div>
 
-      {/* ── GRADING MODAL ── */}
       {modal && <GradingModal />}
     </div>
   );

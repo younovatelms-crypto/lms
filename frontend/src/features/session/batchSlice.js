@@ -16,16 +16,13 @@ import axios from 'axios';
 
 const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
-// ─── Auth header — state.auth.token (same pattern as adminSlice) ──────────────
+// ─── Auth header — reads token from Redux state (same pattern as adminSlice) ──
 const authHeader = (getState) => ({
-  headers: { Authorization: `Bearer ${getState().auth.token}` },
+  headers: { Authorization: `Bearer ${getState().auth?.token}` },
 });
 
-// ─── Role selector helper (used inside thunks) ────────────────────────────────
-const getRole = (getState) => getState().auth?.user?.role || '';
-
-//════════════════════════════════════════════════════════
-// THUNKS
+// ═══════════════════════════════════════════════════════════════════════════════
+// THUNKS — CRUD
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // GET /api/batches
@@ -34,43 +31,24 @@ const getRole = (getState) => getState().auth?.user?.role || '';
 //             meta:{total,page,limit,pages} } }
 //
 // Role behaviour (handled by backend, not frontend):
-//   admin   → all batches
-//   trainer → own batches (filter.trainerId = req.user._id)
-//   trainee → their batch
+//   admin → all batches | trainer → own batches | trainee → their batch
 export const fetchBatches = createAsyncThunk(
   'batches/fetchBatches',
   async (params = {}, { getState, rejectWithValue }) => {
     try {
-      const token = getState().auth?.token;
-      const role = getState().auth?.user?.role;
-
-      console.log('Role:', role);
-      console.log('Token:', token);
-
-      const response = await axios.get(
-        `${API}/api/batches`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          params,
-        }
-      );
-
-      console.log('API Response:', response.data);
-
-      return response.data;
+      const { data } = await axios.get(`${API}/api/batches`, {
+        ...authHeader(getState),
+        params,
+      });
+      return data;
     } catch (err) {
-      console.error('Batch Fetch Error:', err.response?.data);
-
       return rejectWithValue(
-        err.response?.data?.message ||
-        err.message ||
-        'Failed to fetch batches'
+        err.response?.data?.message || err.message || 'Failed to fetch batches'
       );
     }
   }
 );
+
 // GET /api/batches/:id
 // Response: { success, data: { batch:{...}, students:[{name,email,placementStatus}] } }
 export const fetchBatchById = createAsyncThunk(
@@ -112,8 +90,6 @@ export const createBatch = createAsyncThunk(
 );
 
 // PUT /api/batches/:id  [admin only]
-// Body:     any updatable batch fields
-// Response: { success: true, data: { ...updatedBatch } }
 export const updateBatch = createAsyncThunk(
   'batches/updateBatch',
   async ({ id, ...batchData }, { getState, rejectWithValue }) => {
@@ -149,6 +125,70 @@ export const deleteBatch = createAsyncThunk(
 );
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// THUNKS — TRAINEE ASSIGNMENT
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// POST /api/batches/:id/trainees   Body: { traineeIds:[...] }
+// Response: { batch, students, count }
+export const assignTraineesToBatch = createAsyncThunk(
+  'batches/assignTrainees',
+  async ({ batchId, traineeIds }, { getState, rejectWithValue }) => {
+    try {
+      const { data } = await axios.post(
+        `${API}/api/batches/${batchId}/trainees`,
+        { traineeIds },
+        authHeader(getState)
+      );
+      return { batchId, ...data }; // { batchId, batch, students, count }
+    } catch (err) {
+      return rejectWithValue(
+        err.response?.data?.message || err.message || 'Failed to assign trainees'
+      );
+    }
+  }
+);
+
+// DELETE /api/batches/:id/trainees/:traineeId
+export const removeTraineeFromBatch = createAsyncThunk(
+  'batches/removeTrainee',
+  async ({ batchId, traineeId }, { getState, rejectWithValue }) => {
+    try {
+      await axios.delete(
+        `${API}/api/batches/${batchId}/trainees/${traineeId}`,
+        authHeader(getState)
+      );
+      return { batchId, traineeId };
+    } catch (err) {
+      return rejectWithValue(
+        err.response?.data?.message || err.message || 'Failed to remove trainee'
+      );
+    }
+  }
+);
+
+// GET /api/batches/:id/trainees
+// Response: { success, data: { trainees:[...] } }  (also tolerates a bare array)
+export const fetchBatchTrainees = createAsyncThunk(
+  'batches/fetchTrainees',
+  async (batchId, { getState, rejectWithValue }) => {
+    try {
+      const { data } = await axios.get(
+        `${API}/api/batches/${batchId}/trainees`,
+        authHeader(getState)
+      );
+      const trainees = Array.isArray(data)
+        ? data
+        : data?.data?.trainees || data?.trainees || [];
+      return { batchId, trainees };
+    } catch (err) {
+      return rejectWithValue(
+        err.response?.data?.message || err.message || 'Failed to fetch batch trainees'
+      );
+    }
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // SLICE
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -168,6 +208,9 @@ const batchSlice = createSlice({
     detailStatus:    'idle',
     detailError:     null,
 
+    // Trainees keyed by batch  → { [batchId]: [ ...users ] }
+    traineesByBatch: {},
+
     // Create  [admin]
     createStatus:    'idle',
     createError:     null,
@@ -179,6 +222,10 @@ const batchSlice = createSlice({
     // Delete  [admin]
     deleteStatus:    'idle',
     deleteError:     null,
+
+    // Assign / remove trainees
+    assignStatus:    'idle',
+    assignError:     null,
   },
 
   reducers: {
@@ -188,6 +235,7 @@ const batchSlice = createSlice({
       state.createError = null;
       state.updateError = null;
       state.deleteError = null;
+      state.assignError = null;
     },
     resetBatchCreateStatus(state) {
       state.createStatus = 'idle';
@@ -200,17 +248,17 @@ const batchSlice = createSlice({
     // ── fetchBatches ───────────────────────────────────────────────────────────
     // payload = { success, data: { batches:[...], meta:{...} } }
     builder
-      .addCase(fetchBatches.pending,   (s)    => { s.status = 'loading';   s.error = null; })
+      .addCase(fetchBatches.pending,   (s)    => { s.status = 'loading'; s.error = null; })
       .addCase(fetchBatches.fulfilled, (s, a) => {
         s.status  = 'succeeded';
         s.batches = a.payload?.data?.batches || [];
         s.meta    = a.payload?.data?.meta    || s.meta;
       })
-      .addCase(fetchBatches.rejected,  (s, a) => { s.status = 'failed';    s.error = a.payload; });
+      .addCase(fetchBatches.rejected,  (s, a) => { s.status = 'failed'; s.error = a.payload; });
 
     // ── fetchBatchById ─────────────────────────────────────────────────────────
     builder
-      .addCase(fetchBatchById.pending,   (s)    => { s.detailStatus = 'loading';   s.detailError = null; })
+      .addCase(fetchBatchById.pending,   (s)    => { s.detailStatus = 'loading'; s.detailError = null; })
       .addCase(fetchBatchById.fulfilled, (s, a) => {
         s.detailStatus    = 'succeeded';
         s.currentBatch    = a.payload?.data?.batch    || null;
@@ -220,7 +268,7 @@ const batchSlice = createSlice({
 
     // ── createBatch ────────────────────────────────────────────────────────────
     builder
-      .addCase(createBatch.pending,   (s)    => { s.createStatus = 'loading';   s.createError = null; })
+      .addCase(createBatch.pending,   (s)    => { s.createStatus = 'loading'; s.createError = null; })
       .addCase(createBatch.fulfilled, (s, a) => {
         s.createStatus = 'succeeded';
         const nb = a.payload?.data || a.payload;
@@ -230,7 +278,7 @@ const batchSlice = createSlice({
 
     // ── updateBatch ────────────────────────────────────────────────────────────
     builder
-      .addCase(updateBatch.pending,   (s)    => { s.updateStatus = 'loading';   s.updateError = null; })
+      .addCase(updateBatch.pending,   (s)    => { s.updateStatus = 'loading'; s.updateError = null; })
       .addCase(updateBatch.fulfilled, (s, a) => {
         s.updateStatus = 'succeeded';
         const updated = a.payload?.data || a.payload;
@@ -244,13 +292,44 @@ const batchSlice = createSlice({
 
     // ── deleteBatch ────────────────────────────────────────────────────────────
     builder
-      .addCase(deleteBatch.pending,   (s)    => { s.deleteStatus = 'loading';   s.deleteError = null; })
+      .addCase(deleteBatch.pending,   (s)    => { s.deleteStatus = 'loading'; s.deleteError = null; })
       .addCase(deleteBatch.fulfilled, (s, a) => {
         s.deleteStatus = 'succeeded';
         s.batches      = s.batches.filter(b => b._id !== a.payload);
         s.meta.total   = Math.max(0, s.meta.total - 1);
       })
       .addCase(deleteBatch.rejected,  (s, a) => { s.deleteStatus = 'failed'; s.deleteError = a.payload; });
+
+    // ── assignTraineesToBatch ──────────────────────────────────────────────────
+    builder
+      .addCase(assignTraineesToBatch.pending,   (s)    => { s.assignStatus = 'loading'; s.assignError = null; })
+      .addCase(assignTraineesToBatch.fulfilled, (s, a) => {
+        s.assignStatus = 'succeeded';
+        s.traineesByBatch[a.payload.batchId] = a.payload.students || [];
+        // keep detail view in sync if the same batch is open
+        if (s.currentBatch?._id === a.payload.batchId && a.payload.students) {
+          s.currentStudents = a.payload.students;
+        }
+      })
+      .addCase(assignTraineesToBatch.rejected,  (s, a) => { s.assignStatus = 'failed'; s.assignError = a.payload; });
+
+    // ── removeTraineeFromBatch ─────────────────────────────────────────────────
+    builder
+      .addCase(removeTraineeFromBatch.fulfilled, (s, a) => {
+        const list = s.traineesByBatch[a.payload.batchId];
+        if (list) {
+          s.traineesByBatch[a.payload.batchId] =
+            list.filter(u => u._id !== a.payload.traineeId);
+        }
+      })
+      .addCase(removeTraineeFromBatch.rejected,  (s, a) => { s.assignError = a.payload; });
+
+    // ── fetchBatchTrainees ─────────────────────────────────────────────────────
+    builder
+      .addCase(fetchBatchTrainees.fulfilled, (s, a) => {
+        s.traineesByBatch[a.payload.batchId] = a.payload.trainees;
+      })
+      .addCase(fetchBatchTrainees.rejected,  (s, a) => { s.assignError = a.payload; });
 
   },
 });
@@ -260,7 +339,7 @@ export const { clearBatchErrors, resetBatchCreateStatus } = batchSlice.actions;
 
 // ─── Selectors ────────────────────────────────────────────────────────────────
 
-// List selectors
+// List
 export const selectAllBatches        = (s) => s.batches.batches;
 export const selectBatchesMeta       = (s) => s.batches.meta;
 export const selectBatchesStatus     = (s) => s.batches.status;
@@ -270,13 +349,12 @@ export const selectBatchesError      = (s) => s.batches.error;
 export const selectBatchNames        = (s) => s.batches.batches.map(b => b.name).filter(Boolean);
 
 // Derived — option objects for <select> when _id is needed for API
-// → [{ value:'6a16dc4c...', label:'Batch 2026-A', course:'YIEP', status:'upcoming' }]
 export const selectBatchOptions      = (s) =>
   s.batches.batches.map(b => ({
     value:  b._id,
     label:  b.name,
-    course: b.course  || '',
-    status: b.status  || '',
+    course: b.course || '',
+    status: b.status || '',
   }));
 
 // Single batch detail
@@ -284,6 +362,12 @@ export const selectCurrentBatch      = (s) => s.batches.currentBatch;
 export const selectCurrentStudents   = (s) => s.batches.currentStudents;
 export const selectBatchDetailStatus = (s) => s.batches.detailStatus;
 export const selectBatchDetailError  = (s) => s.batches.detailError;
+
+// Trainees
+export const selectBatchTrainees     = (batchId) => (s) =>
+  s.batches.traineesByBatch?.[batchId] ?? [];
+export const selectAssignStatus      = (s) => s.batches.assignStatus;
+export const selectAssignError       = (s) => s.batches.assignError;
 
 // Mutation statuses
 export const selectBatchCreateStatus = (s) => s.batches.createStatus;
