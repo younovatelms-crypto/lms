@@ -9,23 +9,23 @@ const NAV = [
       { to: '/trainee/dashboard',   icon: 'layout-dashboard', label: 'Dashboard'   },
       { to: '/trainee/courses',     icon: 'book',             label: 'My Courses'  },
       { to: '/trainee/sessions',    icon: 'video',            label: 'Sessions'    },
-      { to: '/trainee/assignments', icon: 'file-pencil',      label: 'Assignments' },
+      // { to: '/trainee/assignments', icon: 'file-pencil',      label: 'Assignments' },
     ],
   },
   {
     label: 'Progress',
     items: [
       { to: '/trainee/progress',    icon: 'chart-line',       label: 'My Progress' },
-      { to: '/trainee/internship',  icon: 'briefcase',        label: 'Internship'  },
+      // { to: '/trainee/internship',  icon: 'briefcase',        label: 'Internship'  },
     ],
   },
-  {
-    label: 'Placement',
-    items: [
-      { to: '/trainee/placement',   icon: 'building',         label: 'Placement'   },
-      { to: '/trainee/interviews',  icon: 'calendar-event',   label: 'Interviews'  },
-    ],
-  },
+  // {
+  //   label: 'Placement',
+  //   items: [
+  //     { to: '/trainee/placement',   icon: 'building',         label: 'Placement'   },
+  //     { to: '/trainee/interviews',  icon: 'calendar-event',   label: 'Interviews'  },
+  //   ],
+  // },
   {
     label: 'System',
     items: [

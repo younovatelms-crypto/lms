@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 
 const interviewSchema = new mongoose.Schema({
   trainee:          { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  type:             { type: String, enum: ['mock', 'technical', 'hr', 'final', 'client'], required: true },
+  type:             { type: String, enum: ['mock', 'technical', 'hr', 'final', 'client', 'placement'], required: true },
   status:           { type: String, enum: ['scheduled', 'completed', 'cancelled', 'no_show'], default: 'scheduled' },
   scheduledAt:      { type: Date, required: true },
   interviewerName:  { type: String, default: '' },

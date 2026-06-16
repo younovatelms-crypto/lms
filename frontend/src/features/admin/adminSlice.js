@@ -464,10 +464,94 @@ export const resetUserPassword = createAsyncThunk(
   }
 );
 
+// ── Admin pipeline ─────────────────────────────────────────────────────────
+export const fetchAdminPipeline = createAsyncThunk(
+  'admin/fetchAdminPipeline',
+  async (filters = {}, { getState, rejectWithValue }) => {
+    try {
+      const { data } = await axios.get(`${API}/api/admin/pipeline`, {
+        ...authHeader(getState),
+        params: filters,
+      });
+      return data.pipeline || data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || 'Failed to fetch admin pipeline');
+    }
+  }
+);
+
+export const moveAdminPipelineCandidate = createAsyncThunk(
+  'admin/moveAdminPipelineCandidate',
+  async ({ candidateId, stage, notes }, { getState, rejectWithValue }) => {
+    try {
+      const { data } = await axios.put(`${API}/api/admin/pipeline/${candidateId}/stage`,
+        { stage, notes },
+        authHeader(getState)
+      );
+      return data.trainee || data.candidate || data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || 'Failed to move candidate');
+    }
+  }
+);
+
+// ── Admin interviews ───────────────────────────────────────────────────────
+export const fetchAdminInterviews = createAsyncThunk(
+  'admin/fetchAdminInterviews',
+  async (params = {}, { getState, rejectWithValue }) => {
+    try {
+      const { data } = await axios.get(`${API}/api/admin/interviews`, {
+        ...authHeader(getState),
+        params,
+      });
+      return data.interviews || data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || 'Failed to fetch admin interviews');
+    }
+  }
+);
+
+export const scheduleAdminInterview = createAsyncThunk(
+  'admin/scheduleAdminInterview',
+  async (payload, { getState, rejectWithValue }) => {
+    try {
+      const { data } = await axios.post(`${API}/api/admin/interviews`, payload, authHeader(getState));
+      return data.interview || data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || 'Failed to schedule interview');
+    }
+  }
+);
+
+export const saveAdminInterviewOutcome = createAsyncThunk(
+  'admin/saveAdminInterviewOutcome',
+  async ({ interviewId, update }, { getState, rejectWithValue }) => {
+    try {
+      const { data } = await axios.put(`${API}/api/admin/interviews/${interviewId}`, update, authHeader(getState));
+      return data.interview || data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || 'Failed to save interview outcome');
+    }
+  }
+);
+
+export const deleteAdminInterview = createAsyncThunk(
+  'admin/deleteAdminInterview',
+  async (interviewId, { getState, rejectWithValue }) => {
+    try {
+      const { data } = await axios.delete(`${API}/api/admin/interviews/${interviewId}`, authHeader(getState));
+      return { interviewId, message: data.message };
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || 'Failed to delete interview');
+    }
+  }
+);
+
 // =============================================================================
 // INITIAL STATE
 // =============================================================================
 const initialState = {
+
   // Dashboard
   dashboard:  null,
   dashStatus: 'idle',   // 'idle' | 'loading' | 'succeeded' | 'failed'
@@ -520,7 +604,21 @@ const initialState = {
   usersByRole:        [],
   usersByRoleStatus:  'idle',
   usersByRoleError:   null,
+
+  // ── Admin pipeline ───────────────────────────────────────────────────────
+  adminPipeline: null,
+  adminPipelineStatus: 'idle',
+  adminPipelineError: null,
+
+  // ── Admin interviews ─────────────────────────────────────────────────────
+  adminInterviews: [],
+  adminInterviewsStatus: 'idle',
+  adminInterviewsError: null,
+  adminInterviewCandidates: [],
+  adminInterviewCandidatesStatus: 'idle',
+  adminInterviewCandidatesError: null,
 };
+
 
 // =============================================================================
 // SLICE
@@ -820,9 +918,48 @@ const adminSlice = createSlice({
       .addCase(fetchUsersByRole.rejected, (state, action) => {
         state.usersByRoleStatus = 'failed';
         state.usersByRoleError = action.payload;
-      });
+      })
+
+      // ── fetchAdminPipeline ───────────────────────────────────────────────
+      .addCase(fetchAdminPipeline.pending, (state) => {
+        state.adminPipelineStatus = 'loading';
+        state.adminPipelineError = null;
+      })
+      .addCase(fetchAdminPipeline.fulfilled, (state, action) => {
+        state.adminPipelineStatus = 'succeeded';
+        state.adminPipeline = action.payload;
+      })
+      .addCase(fetchAdminPipeline.rejected, (state, action) => {
+        state.adminPipelineStatus = 'failed';
+        state.adminPipelineError = action.payload;
+      })
+
+      // ── moveAdminPipelineCandidate ───────────────────────────────────────
+      .addCase(moveAdminPipelineCandidate.fulfilled, (state) => {
+        // UI will refetch; nothing critical to update here.
+      })
+
+      // ── fetchAdminInterviews ─────────────────────────────────────────────
+      .addCase(fetchAdminInterviews.pending, (state) => {
+        state.adminInterviewsStatus = 'loading';
+        state.adminInterviewsError = null;
+      })
+      .addCase(fetchAdminInterviews.fulfilled, (state, action) => {
+        state.adminInterviewsStatus = 'succeeded';
+        state.adminInterviews = action.payload || [];
+      })
+      .addCase(fetchAdminInterviews.rejected, (state, action) => {
+        state.adminInterviewsStatus = 'failed';
+        state.adminInterviewsError = action.payload;
+      })
+
+      // ── schedule/save/delete interview ───────────────────────────────────
+      .addCase(scheduleAdminInterview.fulfilled, (state) => {})
+      .addCase(saveAdminInterviewOutcome.fulfilled, (state) => {})
+      .addCase(deleteAdminInterview.fulfilled, (state) => {});
   },
 });
+
 
 // =============================================================================
 // SELECTORS
@@ -891,9 +1028,20 @@ export const selectUsersByRole = (state) => state.admin.usersByRole;
 export const selectUsersByRoleStatus = (state) => state.admin.usersByRoleStatus;
 export const selectUsersByRoleError = (state) => state.admin.usersByRoleError;
 
+// ── Admin pipeline selectors ───────────────────────────────────────────────
+export const selectAdminPipeline = (state) => state.admin.adminPipeline;
+export const selectAdminPipelineStatus = (state) => state.admin.adminPipelineStatus;
+export const selectAdminPipelineError = (state) => state.admin.adminPipelineError;
+
+// ── Admin interviews selectors ──────────────────────────────────────────────
+export const selectAdminInterviews = (state) => state.admin.adminInterviews;
+export const selectAdminInterviewsStatus = (state) => state.admin.adminInterviewsStatus;
+export const selectAdminInterviewsError = (state) => state.admin.adminInterviewsError;
+
 // =============================================================================
 // NAMED ACTIONS + DEFAULT EXPORT
 // =============================================================================
 export const { clearAdminError, updateSettingsField } = adminSlice.actions;
 
 export default adminSlice.reducer;
+

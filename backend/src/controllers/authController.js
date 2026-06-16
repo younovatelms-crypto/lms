@@ -138,19 +138,23 @@ const updateProfile = async (req, res) => {
 
 /* ── CHANGE PASSWORD ─────────────────────────────────────────────────────────
    PUT /api/auth/change-password   [protected]
-   Body: { currentPassword, newPassword }
+   Body: { currentPassword?, newPassword }
    Response: { success, message }
 ──────────────────────────────────────────────────────────────────────────── */
 const changePassword = async (req, res) => {
   const { currentPassword, newPassword } = req.body;
-  if (!currentPassword || !newPassword)
-    return res.status(400).json({ success: false, message: 'currentPassword and newPassword required' });
-  if (newPassword.length < 8)
-    return res.status(400).json({ success: false, message: 'newPassword must be at least 8 characters' });
+  if (!newPassword)
+    return res.status(400).json({ success: false, message: 'newPassword is required' });
+  if (newPassword.length < 6)
+    return res.status(400).json({ success: false, message: 'newPassword must be at least 6 characters' });
 
   const user = await User.findById(req.user._id).select('+password +sessionToken');
-  if (!(await user.comparePassword(currentPassword)))
-    return res.status(401).json({ success: false, message: 'Current password is incorrect' });
+  
+  // If currentPassword is provided, verify it
+  if (currentPassword) {
+    if (!(await user.comparePassword(currentPassword)))
+      return res.status(401).json({ success: false, message: 'Current password is incorrect' });
+  }
 
   const same = await user.comparePassword(newPassword);
   if (same)
@@ -160,7 +164,7 @@ const changePassword = async (req, res) => {
   user.sessionToken = generateSessionToken(); // invalidate all sessions
   await user.save();
 
-  return res.json({ success: true, message: 'Password changed. Please log in again with your new password.' });
+  return res.json({ success: true, message: 'Password changed successfully.' });
 };
 
 /* ── FORGOT PASSWORD ─────────────────────────────────────────────────────────

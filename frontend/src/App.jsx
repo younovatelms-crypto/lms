@@ -32,6 +32,7 @@ import AdminUsers        from './pages/admin/Users';
 import AdminSettings     from './pages/admin/Settings';
 import AdminReports      from './pages/admin/Reports';
 import AdminSupport      from './pages/admin/Support';
+
 import Courses from './pages/admin/Courses';
 import Profile from './pages/admin/Profilepage';
 import CourseDetail from './pages/admin/CourseDetail';
@@ -40,6 +41,8 @@ import CourseSegment from './pages/trainee/CourseSegment';
 import LessonPlayer from './pages/trainee/LessonPlayer';
 import CourseTopic from './pages/trainee/CourseTopic';
 
+import AdminPipeline from './pages/admin/Pipeline';
+import AdminInterviews from './pages/admin/Interviews';
 
 
 import WhatsAppButton from "./pages/WhatsAppButton";
@@ -51,6 +54,7 @@ import TrainerDashboard  from './pages/trainer/Dashboard';
 import TrainerSessions   from './pages/trainer/Sessions';
 import TrainerAttendance from './pages/trainer/Attendance';
 import TrainerAssignments from './pages/trainer/Assignments';
+import TrainerSettings from './pages/trainer/Settings';
 import SessionDetail from './pages/trainer/SessionDetail';
 
 
@@ -58,6 +62,7 @@ import SessionDetail from './pages/trainer/SessionDetail';
 import TraineeDashboard  from './pages/trainee/Dashboard';
 import TraineeSessions   from './pages/trainee/Sessions';
 import TraineeAssignments from './pages/trainee/Assignments';
+import TraineeSettings from './pages/trainee/Settings';
 import Trainee_Courses from './pages/trainee/Trainee_Courses';
 import Trainee_CourseDetail from './pages/trainee/Trainee_CourseDetail';
 
@@ -68,6 +73,7 @@ import HRInterviews  from './pages/hr/Interviews';
 import HRPipeline    from './pages/hr/Pipeline';
 import HREvaluation  from './pages/hr/Evaluation';
 import HREvaluationsList from './pages/hr/EvaluationsList';
+import HRSettings from './pages/hr/Settings';
 
 // ── Protected Route ───────────────────────────────────────────────────────
 function ProtectedRoute({ allowedRoles }) {
@@ -123,6 +129,8 @@ function App() {
             <Route path="programs"      element={<AdminPrograms />} />
             <Route path="users"         element={<AdminUsers />} />
             <Route path="courses"         element={<Courses />} />
+            <Route path="pipeline"        element={<AdminPipeline />} />
+            <Route path="interviews"      element={<AdminInterviews />} />
             <Route path="settings"     element={<AdminSettings />} />
             <Route path="reports"      element={<AdminReports />} />
             <Route path="support"      element={<AdminSupport />} />
@@ -144,7 +152,7 @@ function App() {
             <Route path="sessions"    element={<TrainerSessions />} />
             <Route path="attendance"  element={<TrainerAttendance />} />
             <Route path="assignments" element={<TrainerAssignments />} />
-
+            <Route path="settings"     element={<TrainerSettings />} />
 
                
             <Route path="sessions/new"      element={<SessionDetail mode="create" />} />
@@ -163,6 +171,7 @@ function App() {
             <Route path="dashboard"   element={<TraineeDashboard />} />
             <Route path="sessions"    element={<TraineeSessions />} />
             <Route path="assignments" element={<TraineeAssignments />} />
+            <Route path="settings"    element={<TraineeSettings />} />
              <Route path="profile" element={<Profile />} />
               <Route path="courses" element={<Trainee_Courses />} />
               <Route path="coursess/:id" element={<Trainee_CourseDetail />} />
@@ -184,6 +193,7 @@ function App() {
             <Route path="pipeline"   element={<HRPipeline />} />
             <Route path="evaluations" element={<HREvaluationsList />} />
             <Route path="evaluation/:id" element={<HREvaluation />} />
+            <Route path="settings" element={<HRSettings />} />
              <Route path="profile" element={<Profile />} />
             <Route index element={<Navigate to="dashboard" replace />} />
           </Route>
