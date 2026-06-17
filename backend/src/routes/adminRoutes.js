@@ -358,6 +358,111 @@ router.get('/analytics/placement', async (req, res) => {
   ]);
   return res.json({ success: true, data: pipeline });
 });
+// ── PASSWORD RESET ────────────────────────────────────────────────────────────
+// GET /api/admin/roles
+router.get('/roles', async (req, res) => {
+  try {
+    const roles = await User.distinct('role');
+    return res.json({ 
+      success: true, 
+      data: roles.filter(r => r !== 'admin')
+    });
+  } catch (err) {
+    console.error('Get roles error:', err);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Server error' 
+    });
+  }
+});
+
+// GET /api/admin/users-by-role/:role
+router.get('/users-by-role/:role', async (req, res) => {
+  try {
+    const { role } = req.params;
+    
+    if (!role) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Role is required' 
+      });
+    }
+    
+    const users = await User.find({ role, isActive: true })
+      .select('_id name email role')
+      .sort({ name: 1 })
+      .limit(200);
+    
+    return res.json({ 
+      success: true, 
+      data: users 
+    });
+  } catch (err) {
+    console.error('Get users by role error:', err);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Server error' 
+    });
+  }
+});
+
+// POST /api/admin/reset-password
+//   Body: { userId, newPassword }
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { userId, newPassword } = req.body;
+    
+    if (!userId || !newPassword) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'userId and newPassword are required' 
+      });
+    }
+    
+    if (newPassword.length < 6) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Password must be at least 6 characters' 
+      });
+    }
+    
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid user ID' 
+      });
+    }
+    
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'User not found' 
+      });
+    }
+    
+    if (user.role === 'admin') {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Cannot reset admin password' 
+      });
+    }
+    
+    user.password = newPassword;
+    await user.save();
+    
+    return res.json({ 
+      success: true, 
+      message: `Password reset successfully for ${user.name}` 
+    });
+  } catch (err) {
+    console.error('Password reset error:', err);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Server error' 
+    });
+  }
+});
 
 // ── ASSIGN TRAINER → BATCH ────────────────────────────────────────────────────
 // POST /api/admin/trainers/:id/assign-batch   Body: { batchId }
