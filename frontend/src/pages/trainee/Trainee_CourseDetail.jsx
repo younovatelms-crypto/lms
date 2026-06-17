@@ -9,8 +9,7 @@
 //
 //   • Click a MONTH row (the whole div) → expands its subjects.
 //   • Click a SUBJECT row (the whole div) → expands its S1..S4 sessions.
-//   • Each row shows a lock icon when "Not Started", a check when "Completed",
-//     and a play glyph when "In Progress".
+//   • Click a LESSON row → opens the CourseSegment detail page.
 //
 // Progress is hours-weighted from subject.status:
 //   Completed = 100% of its hours, In Progress = 50%, Not Started = 0%.
@@ -135,12 +134,17 @@ const SESSIONS = [
   { tag: "S4", label: "Feedback / Score", hk: "s4Feedback", field: null, list: false },
 ];
 
-const SessionBlock = ({ subject, def }) => {
+const SessionBlock = ({ subject, def, courseId, subjectId }) => {
+  const navigate = useNavigate();
   const h = subject?.hours?.[def.hk] || 0;
   const content = def.field ? subject?.[def.field] : null;
   if (def.field && !content && h === 0) return null;
 
   const state = rowState(subject.status);
+
+  // open the new CourseSegment page:  /trainee/coursess/:courseId/segment/:segmentId
+  const openSegment = (i) =>
+    navigate(`/trainee/coursess/${courseId}/segment/${subjectId}?session=${def.tag}&i=${i}`);
 
   return (
     <div style={styles.session}>
@@ -153,7 +157,15 @@ const SessionBlock = ({ subject, def }) => {
       {def.list ? (
         <div>
           {splitItems(content).map((item, i) => (
-            <div key={i} className="cd-row" style={styles.lessonRow}>
+            <div
+              key={i}
+              className="cd-row"
+              style={{ ...styles.lessonRow, cursor: "pointer" }}
+              role="button"
+              tabIndex={0}
+              onClick={() => openSegment(i)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openSegment(i); } }}
+            >
               <span style={styles.lessonText}>{item}</span>
               <span style={styles.glyphSlot}><RowGlyph state={state} size={18} /></span>
             </div>
@@ -161,7 +173,13 @@ const SessionBlock = ({ subject, def }) => {
           {splitItems(content).length === 0 && <div style={styles.lessonEmpty}>No content yet.</div>}
         </div>
       ) : def.tag === "S3" ? (
-        <div style={styles.assignment}>
+        <div
+          style={{ ...styles.assignment, cursor: "pointer" }}
+          role="button"
+          tabIndex={0}
+          onClick={() => openSegment(0)}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openSegment(0); } }}
+        >
           <span style={styles.assignText}>{content || "No assignment set."}</span>
           <span style={styles.glyphSlot}><RowGlyph state={state} size={18} /></span>
         </div>
@@ -175,6 +193,7 @@ const SessionBlock = ({ subject, def }) => {
 /* ── subject ("Page") row — expands on whole-div click ──────────────────── */
 
 const SubjectRow = ({ subject }) => {
+  const { id: courseId } = useParams();
   const [open, setOpen] = useState(false);
   const total = subjectHours(subject);
   const state = rowState(subject.status);
@@ -202,7 +221,9 @@ const SubjectRow = ({ subject }) => {
 
       {open && (
         <div className="cd-expand" style={styles.sessionList}>
-          {SESSIONS.map((def) => <SessionBlock key={def.tag} subject={subject} def={def} />)}
+          {SESSIONS.map((def) => (
+            <SessionBlock key={def.tag} subject={subject} def={def} courseId={courseId} subjectId={subject._id} />
+          ))}
         </div>
       )}
     </div>
