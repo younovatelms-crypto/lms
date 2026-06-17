@@ -325,7 +325,7 @@ const BatchCard = ({ batch, idx }) => {
     : Math.min(100, Math.round((batch.sessions.length / 12) * 100));
 
   const meta = [];
-  if (batch.totalStudents != null) meta.push(`${batch.totalStudents} trainees`);
+  if (batch.totalTrainees != null) meta.push(`${batch.totalTrainees} trainees`);
   else if (batch.studentCount != null) meta.push(`${batch.studentCount} trainees`);
   if (batch.avgScore != null) meta.push(`Avg ${batch.avgScore}`);
   meta.push(batch.activeCount != null ? `${batch.activeCount} active` : 'Mentor active');
@@ -652,62 +652,104 @@ const GradingModal = () => {
 // LEADERBOARD
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// const Leaderboard = ({ students }) => {
+//   const STATIC = [
+//     { rank: 1, name: 'Kavya R.',  score: 88, attendance: 92 },
+//     { rank: 2, name: 'Neha S.',   score: 84, attendance: 88 },
+//     { rank: 3, name: 'Ritu M.',   score: 79, attendance: 85 },
+//     { rank: 4, name: 'Ajay P.',   score: 65, attendance: 78 },
+//     { rank: 5, name: 'Dinesh K.', score: 52, attendance: 74 },
+//   ];
+
+//   const rows = students.length > 0
+//     ? [...students]
+//         .filter(s => (s.averageScore ?? s.score) != null)
+//         .sort((a, b) => (b.averageScore ?? b.score ?? 0) - (a.averageScore ?? a.score ?? 0))
+//         .slice(0, 5)
+//         .map((s, i) => ({ rank: i + 1, name: s.name, score: s.averageScore ?? s.score ?? 0, attendance: s.attendance ?? null }))
+//     : STATIC;
+
+//   const rankColor = { 1: '#ca8a04', 2: '#9ca3af', 3: '#b45309' };
+//   const atRisk    = rows.filter(r => r.score < 60);
+
+//   return (
+//     <>
+//       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+//         <thead>
+//           <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+//             {['#', 'TRAINEE', 'SCORE'].map(h => (
+//               <th key={h} style={{ fontSize: '0.67rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.7px', padding: '6px 10px', textAlign: 'left' }}>
+//                 {h}
+//               </th>
+//             ))}
+//           </tr>
+//         </thead>
+//         <tbody>
+//           {rows.map(r => (
+//             <tr key={r.rank} style={{ borderBottom: '1px solid #f9fafb' }}>
+//               <td style={{ padding: '11px 10px', fontSize: '0.82rem', fontWeight: 700, color: rankColor[r.rank] || '#9ca3af', width: 28 }}>{r.rank}</td>
+//               <td style={{ padding: '11px 10px', fontSize: '0.85rem', fontWeight: 500, color: '#111827' }}>{r.name}</td>
+//               <td style={{ padding: '11px 10px', fontSize: '0.9rem', fontWeight: 700, color: scoreCol(r.score) }}>{r.score}</td>
+//             </tr>
+//           ))}
+//         </tbody>
+//       </table>
+
+//       {atRisk.map(r => (
+//         <div key={r.rank} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: '#fefce8', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 12px', marginTop: 12 }}>
+//           <span style={{ color: '#d97706', fontSize: '0.88rem', flexShrink: 0, lineHeight: 1.5 }}>⚠</span>
+//           <div style={{ fontSize: '0.77rem', color: '#92400e', lineHeight: 1.6 }}>
+//             <strong style={{ color: '#78350f' }}>{r.name}</strong>
+//             {' '}— score {r.score}
+//             {r.attendance != null ? `, attendance ${r.attendance}%` : ''}
+//             . At-risk flag active.
+//           </div>
+//         </div>
+//       ))}
+//     </>
+//   );
+// };
 const Leaderboard = ({ students }) => {
-  const STATIC = [
-    { rank: 1, name: 'Kavya R.',  score: 88, attendance: 92 },
-    { rank: 2, name: 'Neha S.',   score: 84, attendance: 88 },
-    { rank: 3, name: 'Ritu M.',   score: 79, attendance: 85 },
-    { rank: 4, name: 'Ajay P.',   score: 65, attendance: 78 },
-    { rank: 5, name: 'Dinesh K.', score: 52, attendance: 74 },
-  ];
-
-  const rows = students.length > 0
-    ? [...students]
-        .filter(s => (s.averageScore ?? s.score) != null)
-        .sort((a, b) => (b.averageScore ?? b.score ?? 0) - (a.averageScore ?? a.score ?? 0))
-        .slice(0, 5)
-        .map((s, i) => ({ rank: i + 1, name: s.name, score: s.averageScore ?? s.score ?? 0, attendance: s.attendance ?? null }))
-    : STATIC;
-
-  const rankColor = { 1: '#ca8a04', 2: '#9ca3af', 3: '#b45309' };
-  const atRisk    = rows.filter(r => r.score < 60);
+  const rows = students.map((s, i) => ({
+    rank: i + 1,
+    name: s.name,
+    score: '-'
+  }));
 
   return (
-    <>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
-            {['#', 'TRAINEE', 'SCORE'].map(h => (
-              <th key={h} style={{ fontSize: '0.67rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.7px', padding: '6px 10px', textAlign: 'left' }}>
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(r => (
-            <tr key={r.rank} style={{ borderBottom: '1px solid #f9fafb' }}>
-              <td style={{ padding: '11px 10px', fontSize: '0.82rem', fontWeight: 700, color: rankColor[r.rank] || '#9ca3af', width: 28 }}>{r.rank}</td>
-              <td style={{ padding: '11px 10px', fontSize: '0.85rem', fontWeight: 500, color: '#111827' }}>{r.name}</td>
-              <td style={{ padding: '11px 10px', fontSize: '0.9rem', fontWeight: 700, color: scoreCol(r.score) }}>{r.score}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <thead>
+        <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+          <th style={{ padding: '8px', textAlign: 'left' }}>#</th>
+          <th style={{ padding: '8px', textAlign: 'left' }}>TRAINEE</th>
+          <th style={{ padding: '8px', textAlign: 'left' }}>SCORE</th>
+        </tr>
+      </thead>
 
-      {atRisk.map(r => (
-        <div key={r.rank} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: '#fefce8', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 12px', marginTop: 12 }}>
-          <span style={{ color: '#d97706', fontSize: '0.88rem', flexShrink: 0, lineHeight: 1.5 }}>⚠</span>
-          <div style={{ fontSize: '0.77rem', color: '#92400e', lineHeight: 1.6 }}>
-            <strong style={{ color: '#78350f' }}>{r.name}</strong>
-            {' '}— score {r.score}
-            {r.attendance != null ? `, attendance ${r.attendance}%` : ''}
-            . At-risk flag active.
-          </div>
-        </div>
-      ))}
-    </>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.rank}>
+            <td style={{ padding: '10px 8px' }}>{row.rank}</td>
+            <td style={{ padding: '10px 8px' }}>{row.name}</td>
+            <td style={{ padding: '10px 8px' }}>-</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
+};
+
+const thStyle = {
+  padding: '10px',
+  textAlign: 'left',
+  fontSize: '0.75rem',
+  color: '#6b7280'
+};
+
+const tdStyle = {
+  padding: '12px 10px',
+  borderBottom: '1px solid #f3f4f6',
+  fontSize: '0.85rem'
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -876,63 +918,335 @@ const TraineeDetail = ({ trainee, onBack, idx = 0 }) => {
   const batchName = trainee.batchId?.name || (typeof trainee.batchId === 'string' ? trainee.batchId : null);
   const ready     = trainee.placementStatus === 'ready' || trainee.isPlacementReady;
 
+  // const facts = [
+  //   ['Email',            trainee.email],
+  //   ['Phone',            trainee.phone || trainee.mobile],
+  //   ['Batch',            batchName],
+  //   ['Average Score',    score != null ? score : null],
+  //   ['Attendance',       trainee.attendance != null ? `${trainee.attendance}%` : null],
+  //   ['Assignments Done', trainee.assignmentsCompleted ?? trainee.completedAssignments],
+  //   ['Joined',           trainee.joinedAt ? fmtDate(trainee.joinedAt) : null],
+  //   ['Status',           trainee.status],
+  // ].filter(([, v]) => v != null && v !== '');
   const facts = [
-    ['Email',            trainee.email],
-    ['Phone',            trainee.phone || trainee.mobile],
-    ['Batch',            batchName],
-    ['Average Score',    score != null ? score : null],
-    ['Attendance',       trainee.attendance != null ? `${trainee.attendance}%` : null],
-    ['Assignments Done', trainee.assignmentsCompleted ?? trainee.completedAssignments],
-    ['Joined',           trainee.joinedAt ? fmtDate(trainee.joinedAt) : null],
-    ['Status',           trainee.status],
-  ].filter(([, v]) => v != null && v !== '');
+  ['Name', trainee.name],
+  ['Email', trainee.email],
+  ['Phone', trainee.phone],
+  ['Gender', trainee.gender],
 
-  return (
-    <div style={{ animation: 'fadeUp .25s ease' }}>
-      <button
-        onClick={onBack}
-        className="td-btn"
-        style={{ background: '#fff', color: '#6366f1', border: '1px solid #e0e7ff', padding: '7px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', marginBottom: 20, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+  ['Address', trainee.address],
+  ['City', trainee.city],
+  ['State', trainee.state],
+  ['Country', trainee.country],
+  ['Pincode', trainee.pincode],
+
+  ['College', trainee.collegeName],
+  ['Degree', trainee.degree],
+  ['Branch', trainee.branch],
+
+  ['Placement Status', trainee.placementStatus],
+  ['Company', trainee.companyName],
+  ['CTC', trainee.ctc],
+
+  ['LinkedIn', trainee.linkedIn],
+  ['GitHub', trainee.github],
+  ['Portfolio', trainee.portfolioUrl],
+
+  ['Bio', trainee.bio],
+
+  [
+    'Batches',
+    trainee.batchIds?.map(b => b.name).join(', ')
+  ],
+
+  [
+    'Skills',
+    trainee.skills?.length
+      ? trainee.skills.join(', ')
+      : 'N/A'
+  ],
+
+  ['Created At', fmtDate(trainee.createdAt)],
+  ['Last Updated', fmtDate(trainee.updatedAt)],
+]
+.filter(([, value]) => value !== undefined && value !== null);
+
+return (
+
+  <div style={{ animation: 'fadeUp .25s ease' }}>
+    <button
+      onClick={onBack}
+      className="td-btn"
+      style={{
+        background: '#fff',
+        color: '#6366f1',
+        border: '1px solid #e0e7ff',
+        padding: '8px 16px',
+        borderRadius: 10,
+        fontSize: '0.8rem',
+        fontWeight: 600,
+        cursor: 'pointer',
+        marginBottom: 20,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        boxShadow: '0 2px 8px rgba(99,102,241,.08)'
+      }}
+    >
+      ← Back to all trainees
+    </button>
+{/* Profile Header */}
+<div
+  style={{
+    background: `linear-gradient(135deg, ${c}, #8b5cf6)`,
+    borderRadius: 20,
+    padding: 28,
+    color: '#fff',
+    marginBottom: 24,
+    boxShadow: '0 10px 30px rgba(99,102,241,.15)'
+  }}
+>
+  <div
+    style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: 20,
+      flexWrap: 'wrap'
+    }}
+  >
+    <div
+      style={{
+        width: 80,
+        height: 80,
+        borderRadius: '50%',
+        background: 'rgba(255,255,255,.2)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '2rem',
+        fontWeight: 700,
+        color: '#fff',
+        border: '3px solid rgba(255,255,255,.25)'
+      }}
+    >
+      {(trainee.name || 'T')[0].toUpperCase()}
+    </div>
+
+    <div>
+      <h2
+        style={{
+          margin: 0,
+          fontSize: '1.5rem',
+          fontWeight: 700
+        }}
       >
-        ← Back to all trainees
-      </button>
+        {trainee.name}
+      </h2>
 
-      <div style={{ border: '1px solid #e5e7eb', borderLeft: `4px solid ${c}`, borderRadius: 12, padding: '20px 22px', background: '#fff', marginBottom: 20 }}>
-        <div className="td-detail-head" style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <div style={{ width: 56, height: 56, borderRadius: '50%', background: c, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '1.4rem', color: '#fff', flexShrink: 0 }}>
-            {(trainee.name || 'S')[0].toUpperCase()}
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: '1.15rem', color: '#111827', letterSpacing: '-0.3px' }}>{trainee.name || 'Trainee'}</div>
-            <div style={{ fontSize: '0.8rem', color: '#9ca3af' }}>{trainee.email}</div>
-          </div>
-          <div className="td-detail-pills" style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {batchName && <Pill bg={l} color={c}>{batchName}</Pill>}
-            {score != null && (
-              <Pill bg={score >= 75 ? '#dcfce7' : score >= 55 ? '#fef9c3' : '#fee2e2'} color={scoreCol(score)}>
-                Score {score}
-              </Pill>
-            )}
-            {ready && <Pill bg="#dcfce7" color="#15803d">✓ Placement Ready</Pill>}
-          </div>
-        </div>
+      <div
+        style={{
+          marginTop: 6,
+          opacity: 0.9,
+          fontSize: '.95rem'
+        }}
+      >
+        {trainee.email}
       </div>
+    </div>
 
-      <H2>Details</H2>
-      {facts.length === 0 ? (
-        <Empty icon="📄" msg="No additional details available" />
-      ) : (
-        <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden', background: '#fff' }}>
-          {facts.map(([label, value], i) => (
-            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '12px 18px', borderBottom: i < facts.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
-              <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{label}</span>
-              <span style={{ fontSize: '0.85rem', fontWeight: 500, color: '#111827', textAlign: 'right' }}>{String(value)}</span>
-            </div>
-          ))}
-        </div>
+    <div
+      style={{
+        marginLeft: 'auto',
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 8
+      }}
+    >
+      {batchName && (
+        <Pill
+          bg="rgba(255,255,255,.18)"
+          color="#fff"
+        >
+          {batchName}
+        </Pill>
+      )}
+
+      <Pill
+        bg="rgba(255,255,255,.18)"
+        color="#fff"
+      >
+        Score -
+      </Pill>
+
+      {ready && (
+        <Pill
+          bg="#dcfce7"
+          color="#15803d"
+        >
+          ✓ Placement Ready
+        </Pill>
       )}
     </div>
-  );
+  </div>
+</div>
+
+{/* Stats */}
+<div
+  style={{
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))',
+    gap: 16,
+    marginBottom: 24
+  }}
+>
+  <div
+    style={{
+      background: '#fff',
+      border: '1px solid #e5e7eb',
+      borderRadius: 16,
+      padding: 18
+    }}
+  >
+    <div style={{ fontSize: '.75rem', color: '#9ca3af' }}>
+      STATUS
+    </div>
+    <div
+      style={{
+        fontWeight: 700,
+        fontSize: '1rem',
+        marginTop: 6
+      }}
+    >
+      {trainee.placementStatus || 'Enrolled'}
+    </div>
+  </div>
+
+  <div
+    style={{
+      background: '#fff',
+      border: '1px solid #e5e7eb',
+      borderRadius: 16,
+      padding: 18
+    }}
+  >
+    <div style={{ fontSize: '.75rem', color: '#9ca3af' }}>
+      BATCHES
+    </div>
+    <div
+      style={{
+        fontWeight: 700,
+        fontSize: '1rem',
+        marginTop: 6
+      }}
+    >
+      {trainee.batchIds?.length || 0}
+    </div>
+  </div>
+
+  <div
+    style={{
+      background: '#fff',
+      border: '1px solid #e5e7eb',
+      borderRadius: 16,
+      padding: 18
+    }}
+  >
+    <div style={{ fontSize: '.75rem', color: '#9ca3af' }}>
+      SKILLS
+    </div>
+    <div
+      style={{
+        fontWeight: 700,
+        fontSize: '1rem',
+        marginTop: 6
+      }}
+    >
+      {trainee.skills?.length || 0}
+    </div>
+  </div>
+</div>
+
+{/* Trainee Information */}
+<div
+  style={{
+    background: '#fff',
+    border: '1px solid #e5e7eb',
+    borderRadius: 20,
+    overflow: 'hidden',
+    boxShadow: '0 4px 20px rgba(0,0,0,.04)'
+  }}
+>
+  <div
+    style={{
+      padding: '18px 22px',
+      borderBottom: '1px solid #f1f5f9',
+      background: '#fafafa',
+      fontWeight: 700,
+      fontSize: '1rem'
+    }}
+  >
+    👨‍🎓 Trainee Information
+  </div>
+
+  {facts.length === 0 ? (
+    <Empty
+      icon="📄"
+      msg="No additional details available"
+    />
+  ) : (
+    <div
+      style={{
+        padding: 20,
+        display: 'grid',
+        gridTemplateColumns:
+          'repeat(auto-fit,minmax(240px,1fr))',
+        gap: 16
+      }}
+    >
+      {facts.map(([label, value]) => (
+        <div
+          key={label}
+          style={{
+            background: '#f8fafc',
+            border: '1px solid #e5e7eb',
+            borderRadius: 16,
+            padding: 18,
+            transition: 'all .2s ease'
+          }}
+        >
+          <div
+            style={{
+              fontSize: '.72rem',
+              fontWeight: 700,
+              color: '#6366f1',
+              textTransform: 'uppercase',
+              letterSpacing: '.6px',
+              marginBottom: 8
+            }}
+          >
+            {label}
+          </div>
+
+          <div
+            style={{
+              color: '#111827',
+              fontWeight: 600,
+              fontSize: '.95rem',
+              wordBreak: 'break-word'
+            }}
+          >
+            {value || '-'}
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
+```
+
+  </div>
+);
+
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1066,7 +1380,7 @@ const TABS = [
   { id: 'overview',    label: 'Overview'    },
   { id: 'sessions',    label: 'Sessions'    },
   { id: 'assignments', label: 'Assignments' },
-  { id: 'students',    label: 'Students'    },
+  { id: 'students',    label: 'Trainee'   },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
