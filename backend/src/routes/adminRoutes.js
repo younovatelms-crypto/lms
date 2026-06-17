@@ -14,9 +14,22 @@ const router = express.Router();
 // ── Helper: normalize batch input → array of ids ──────────────────────────────
 // Accepts either `batchIds` (array) or a single `batchId` from the request body
 // and returns a clean array. Used wherever we create/update a user's batches.
+// const normalizeBatchIds = (body = {}) => {
+//   if (Array.isArray(body.batchIds)) return body.batchIds.filter(Boolean);
+//   if (body.batchId) return [body.batchId];
+//   return [];
+// };
 const normalizeBatchIds = (body = {}) => {
-  if (Array.isArray(body.batchIds)) return body.batchIds.filter(Boolean);
-  if (body.batchId) return [body.batchId];
+  if (body.batchIds !== undefined) {
+    return []
+      .concat(body.batchIds)
+      .filter(id => id && String(id).trim());
+  }
+
+  if (body.batchId) {
+    return [body.batchId];
+  }
+
   return [];
 };
 

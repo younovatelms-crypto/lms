@@ -425,7 +425,7 @@ const UserManagement = () => {
                   color: '#64748B',
                   height: '50px'
                 }}>
-                  {user.batchId?.name ? (
+                  {/* {user.batchId?.name ? (
                     <span style={{
                       padding: '4px 8px',
                       borderRadius: 8,
@@ -439,7 +439,24 @@ const UserManagement = () => {
                     </span>
                   ) : (
                     <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>Not assigned</span>
-                  )}
+                  )} */}
+                  {user.batchIds?.length > 0 ? (
+  <span style={{
+    padding: '4px 8px',
+    borderRadius: 8,
+    fontSize: 11,
+    fontWeight: 500,
+    background: '#F0F9FF',
+    color: '#0369A1',
+    border: '1px solid #BAE6FD'
+  }}>
+    {user.batchIds.map(batch => batch.name).join(', ')}
+  </span>
+) : (
+  <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>
+    Not assigned
+  </span>
+)}
                 </td>
                 <td style={{ 
                   padding: '12px 16px',
@@ -728,7 +745,8 @@ const UserModal = ({ user, batches, onClose, onSave }) => {
     email: user?.email || '',
     role: user?.role || 'trainee',
     password: '',
-    batchId: user?.batchId?._id || user?.batchId || '' // Handle both object and string
+    // batchId: user?.batchId?._id || user?.batchId || '' // Handle both object and string
+    batchId: user?.batchIds?.[0]?._id || ''
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -771,7 +789,7 @@ const UserModal = ({ user, batches, onClose, onSave }) => {
     }
     
     setLoading(true);
-    const submitData = { ...formData };
+    const submitData = { ...formData,batchIds: formData.batchId ? [formData.batchId] : [] };
     if (user && !submitData.password) {
       delete submitData.password;
     }
