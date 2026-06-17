@@ -13,15 +13,16 @@ router.use(protect, authorize('trainer'));
 // ─── GET /api/trainer/dashboard ───────────────────────────────────────────────
 router.get('/dashboard', async (req, res) => {
   try {
-    const [upcomingSessions, liveSessions, pendingGrades, totalStudents] = await Promise.all([
+    const [upcomingSessions, liveSessions, pendingGrades, totalTrainees,trainees] = await Promise.all([
       Session.find({ trainerId: req.user._id, status: 'scheduled', scheduledAt: { $gte: new Date() } })
         .populate('batchId', 'name').sort('scheduledAt').limit(5),
       Session.find({ trainerId: req.user._id, status: 'live' })
         .populate('batchId', 'name').limit(3),
       Assignment.countDocuments({ createdBy: req.user._id, 'submissions.status': 'submitted' }),
       User.countDocuments({ role: 'trainee', isActive: true }),
+      User.find({role: 'trainee',isActive: true}).select('-password').populate('batchIds', 'name').lean()
     ]);
-    return res.json({ success: true, upcomingSessions, liveSessions, pendingGrades, totalStudents });
+    return res.json({ success: true, upcomingSessions, liveSessions, pendingGrades, totalTrainees,trainees });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -155,19 +156,16 @@ router.get('/students', async (req, res) => {
     const trainerId = req.user._id;
 
     const batches = await Batch.find({
-      trainerId: trainerId
+      // trainerId: trainerId
     });
 
     const batchIds = batches.map(batch => batch._id);
-
-    console.log("Trainer ID:", trainerId);
-    console.log("Batch IDs:", batchIds);
-
     const students = await User.find({
       role: 'trainee',
-      batchId: { $in: batchIds }
+      batchIds: { $in: batchIds }
     })
       .populate('batchId', 'name')
+      .select('-password')
       .lean();
 
     console.log("Students Found:", students.length);

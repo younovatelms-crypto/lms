@@ -30,6 +30,7 @@ export const fetchTrainerDashboard = createAsyncThunk(
   }
 );
 
+
 // GET /api/trainer/sessions
 export const fetchTrainerSessions = createAsyncThunk(
   'trainer/fetchTrainerSessions',
