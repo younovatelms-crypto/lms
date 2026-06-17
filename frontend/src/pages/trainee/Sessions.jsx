@@ -1,3 +1,7 @@
+// src/pages/trainee/Sessions.jsx   →  route /trainee/sessions
+//
+// Lists the trainee's sessions and lets them join a LIVE one.
+// Pairs with features/sessions/sessionsSlice.js (store key "traineeSessions").
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import TraineeLiveSession from '../../features/session/TraineeLiveSession';
@@ -15,35 +19,30 @@ import {
 const TraineeSessions = () => {
   const dispatch = useDispatch();
 
-  const sessionsRaw = useSelector(selectSessions);
-  const sessions    = Array.isArray(sessionsRaw) ? sessionsRaw : [];
+  const sessions   = useSelector(selectSessions);          // already an array (selector guarantees it)
   const status     = useSelector(selectSessionsStatus);
   const error      = useSelector(selectSessionsError);
   const joinStatus = useSelector(selectJoinStatus);
   const joinError  = useSelector(selectJoinError);
 
-  // The session the trainee is currently in (+ its LiveKit connection)
-  // null = show the list
+  // active = the session we're currently inside (+ its LiveKit connection); null = list view
   const [active, setActive] = useState(null);
   const [joiningId, setJoiningId] = useState(null);
-
-  // Prefer the auth slice; fall back to localStorage if you store the user there.
-  const user = useSelector((s) => s.auth?.user) || getCurrentUser();
 
   useEffect(() => {
     dispatch(fetchSessions());
   }, [dispatch]);
 
-  // Click "Join" → fetch a LiveKit token via the slice, then enter the room.
+  // Click "Join" → get a LiveKit token via the slice, then enter the room.
   const handleJoin = async (session) => {
     setJoiningId(session._id);
     try {
       const connection = await dispatch(
         joinSession({ id: session._id, passcode: session.passcode })
-      ).unwrap();
-      setActive({ session, connection }); // { token, url, role }
+      ).unwrap();                                   // { id, token, url, roomName, role }
+      setActive({ session, connection });
     } catch (_) {
-      // joinError is rendered below; nothing else to do here
+      // joinError is rendered below
     } finally {
       setJoiningId(null);
     }
@@ -54,19 +53,18 @@ const TraineeSessions = () => {
     setActive(null);
   };
 
-  // ---- Live room view: hand off entirely to TraineeLiveSession ----
+  // ── Live room view: hand off entirely to TraineeLiveSession ──
   if (active) {
     return (
       <TraineeLiveSession
         session={active.session}
-        user={user}
-        connection={active.connection}   // <-- TraineeLiveSession should connect with connection.token + connection.url
+        connection={active.connection}   // connects with connection.token + connection.url
         onLeave={handleLeave}
       />
     );
   }
 
-  // ---- List view ----
+  // ── List view ──
   if (status === 'loading' || status === 'idle')
     return <div className="p-6 text-gray-500">Loading sessions…</div>;
   if (status === 'failed')
@@ -86,15 +84,15 @@ const TraineeSessions = () => {
         <p className="text-gray-500">No sessions available.</p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {sessions.map((session, idx) => {
-            const isLive = session.status === 'live';
-            const isOver = session.status === 'completed' || session.status === 'cancelled';
-            const trainerName = session.trainerId?.name || session.trainer?.name || 'TBD';
-            const isJoining = joinStatus === 'loading' && joiningId === session._id;
+          {sessions.map((session) => {
+            const isLive      = session.status === 'live';
+            const isOver      = session.status === 'completed' || session.status === 'cancelled';
+            const trainerName = session.trainerId?.name || 'TBD';
+            const isJoining   = joinStatus === 'loading' && joiningId === session._id;
 
             return (
               <div
-                key={session._id || idx}
+                key={session._id}
                 className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex flex-col"
               >
                 <div className="flex items-start justify-between">
@@ -143,7 +141,7 @@ const TraineeSessions = () => {
   );
 };
 
-// ── Small presentational helper ───────────────────────────────────────────────
+// ── Small presentational helper ──
 function StatusBadge({ status }) {
   const map = {
     live:      'bg-green-100 text-green-700',
@@ -159,7 +157,7 @@ function StatusBadge({ status }) {
   );
 }
 
-// ── Date/time formatting off the single scheduledAt field ─────────────────────
+// ── Date/time formatting off the single scheduledAt field ──
 function formatDate(scheduledAt) {
   if (!scheduledAt) return 'TBD';
   return new Date(scheduledAt).toLocaleDateString();
@@ -172,15 +170,6 @@ function formatTime(scheduledAt, timezone) {
     minute: '2-digit',
     ...(timezone ? { timeZone: timezone } : {}),
   });
-}
-
-// Fallback only — prefer state.auth.user from your authSlice.
-function getCurrentUser() {
-  try {
-    return JSON.parse(localStorage.getItem('user')) || { id: 'guest', name: 'Trainee' };
-  } catch {
-    return { id: 'guest', name: 'Trainee' };
-  }
 }
 
 export default TraineeSessions;

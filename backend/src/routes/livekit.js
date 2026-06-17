@@ -8,7 +8,7 @@ const router = express.Router();
 
 const ROLE_GRANTS = {
   trainer: { canPublish: true,  canSubscribe: true, canPublishData: true, roomAdmin: true },
-  student: { canPublish: false, canSubscribe: true, canPublishData: true },
+  student: { canPublish: true, canSubscribe: true, canPublishData: true },
 };
 
 // POST /api/livekit/token
