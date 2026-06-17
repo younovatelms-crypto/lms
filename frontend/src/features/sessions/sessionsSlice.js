@@ -1,127 +1,69 @@
-// src/features/sessions/sessionsSlice.js   (TRAINEE-side slice)
-// Namespaced as "traineeSessions" so it never collides with the trainer-side
-// slice in features/session/sessionsSlice.js (which uses "sessions").
+// src/features/sessions/sessionsSlice.js   (TRAINEE-side slice → store key "traineeSessions")
+//
+// API integration for the trainee /trainee/sessions page.
+// Only two calls are needed here: list the trainee's sessions, and join a live one.
+//
+// FIXES vs the old version:
+//   • JWT is read from redux state.auth.token (the app persists auth via redux-persist,
+//     so localStorage.getItem('token') was usually null → 401 on every request).
+//   • Calls the trainee endpoints that actually exist & are role-correct:
+//       GET  /api/trainee/sessions
+//       POST /api/trainee/sessions/:id/join   → { token, url, roomName, role }
+//   • Dropped create/update/delete/enroll (they pointed at unmounted routes and the
+//     trainee page never used them).
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
-const getAuthHeader = () => ({
-  headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+// '' → relative URL; goes through CRA's  "proxy": "http://localhost:8080"
+const API = process.env.REACT_APP_API_BASE_URL || '';
+
+const authHeader = (getState) => ({
+  headers: { Authorization: `Bearer ${getState().auth?.token || ''}` },
 });
 
-// ── Async Thunks ──────────────────────────────────────────────────────────────
-
-// GET /api/sessions  → sessions where you're the trainer OR an enrolled trainee
+// GET /api/trainee/sessions  → sessions for the trainee's batch OR ones they're enrolled in
 export const fetchSessions = createAsyncThunk(
   'traineeSessions/fetchSessions',
-  async (_, { rejectWithValue }) => {
+  async (params = {}, { getState, rejectWithValue }) => {
     try {
-      const res = await axios.get('/api/sessions', getAuthHeader());
-      const data = res.data;
-
-      // Accept a bare array, or a wrapped { sessions: [] } / { data: [] } shape.
-      const list = Array.isArray(data)
-        ? data
-        : Array.isArray(data?.sessions)
-        ? data.sessions
-        : Array.isArray(data?.data)
-        ? data.data
-        : null;
-
-      if (!list) {
-        // Most common cause: the request hit the React dev server, so we got the
-        // index.html string back instead of JSON → fix your proxy / axios baseURL.
-        return rejectWithValue(
-          typeof data === 'string'
-            ? '/api/sessions returned HTML, not JSON. Configure the dev-server proxy or axios baseURL so it reaches your backend.'
-            : 'Unexpected /api/sessions response shape.'
-        );
-      }
-      return list;
+      const { data } = await axios.get(`${API}/api/trainee/sessions`, {
+        ...authHeader(getState),
+        params,
+      });
+      // Accept { sessions: [] } | { data: [] } | bare array
+      return Array.isArray(data) ? data : data.sessions || data.data || [];
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Failed to fetch sessions');
     }
   }
 );
 
-export const createSession = createAsyncThunk(
-  'traineeSessions/createSession',
-  async (sessionData, { rejectWithValue }) => {
-    try {
-      const res = await axios.post('/api/sessions', sessionData, getAuthHeader());
-      return res.data;
-    } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to create session');
-    }
-  }
-);
-
-export const updateSession = createAsyncThunk(
-  'traineeSessions/updateSession',
-  async ({ id, ...sessionData }, { rejectWithValue }) => {
-    try {
-      const res = await axios.put(`/api/sessions/${id}`, sessionData, getAuthHeader());
-      return res.data;
-    } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to update session');
-    }
-  }
-);
-
-export const deleteSession = createAsyncThunk(
-  'traineeSessions/deleteSession',
-  async (id, { rejectWithValue }) => {
-    try {
-      await axios.delete(`/api/sessions/${id}`, getAuthHeader());
-      return id;
-    } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to delete session');
-    }
-  }
-);
-
-// POST /api/sessions/:id/enroll  → trainee self-enrolls; returns the updated session
-export const enrollSession = createAsyncThunk(
-  'traineeSessions/enrollSession',
-  async (id, { rejectWithValue }) => {
-    try {
-      const res = await axios.post(`/api/sessions/${id}/enroll`, {}, getAuthHeader());
-      return res.data;
-    } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to enroll');
-    }
-  }
-);
-
-// POST /api/sessions/:id/join  → returns the LiveKit { token, url, role } for the room
+// POST /api/trainee/sessions/:id/join  → LiveKit connection for the room
 export const joinSession = createAsyncThunk(
   'traineeSessions/joinSession',
-  async ({ id, passcode } = {}, { rejectWithValue }) => {
+  async ({ id, passcode } = {}, { getState, rejectWithValue }) => {
     try {
-      const res = await axios.post(`/api/sessions/${id}/join`, { passcode }, getAuthHeader());
-      return { id, ...res.data }; // { id, token, url, role }
+      const { data } = await axios.post(
+        `${API}/api/trainee/sessions/${id}/join`,
+        { passcode },
+        authHeader(getState)
+      );
+      // data = { success, token, url, roomName, role:'student' }
+      return { id, token: data.token, url: data.url, roomName: data.roomName, role: data.role };
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Could not join session');
     }
   }
 );
 
-// ── Slice ─────────────────────────────────────────────────────────────────────
-
-const upsert = (items, session) => {
-  const i = items.findIndex((s) => s._id === session._id);
-  if (i === -1) items.push(session);
-  else items[i] = session;
-};
-
 const traineeSessionsSlice = createSlice({
   name: 'traineeSessions',
   initialState: {
     items: [],
-    status: 'idle', // idle | loading | succeeded | failed
+    status: 'idle',       // idle | loading | succeeded | failed
     error: null,
 
-    // live-room connection from the last successful joinSession
-    connection: null, // { id, token, url, role }
+    connection: null,     // { id, token, url, roomName, role } from the last join
     joinStatus: 'idle',
     joinError: null,
   },
@@ -138,7 +80,6 @@ const traineeSessionsSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // fetch
       .addCase(fetchSessions.pending, (state) => {
         state.status = 'loading';
         state.error = null;
@@ -152,17 +93,6 @@ const traineeSessionsSlice = createSlice({
         state.error = action.payload;
       })
 
-      // create / update / enroll all return a session → upsert it
-      .addCase(createSession.fulfilled, (state, action) => { upsert(state.items, action.payload); })
-      .addCase(updateSession.fulfilled, (state, action) => { upsert(state.items, action.payload); })
-      .addCase(enrollSession.fulfilled, (state, action) => { upsert(state.items, action.payload); })
-
-      // delete
-      .addCase(deleteSession.fulfilled, (state, action) => {
-        state.items = state.items.filter((s) => s._id !== action.payload);
-      })
-
-      // join → store the LiveKit connection
       .addCase(joinSession.pending, (state) => {
         state.joinStatus = 'loading';
         state.joinError = null;
