@@ -717,6 +717,10 @@ const adminSlice = createSlice({
       // ── createUser ─────────────────────────────────────────────────────────
       .addCase(createUser.fulfilled, (state, action) => {
         const newUser = action.payload;
+        // Populate batchIds from state.batches since API returns raw ObjectIds
+        newUser.batchIds = (newUser.batchIds || []).map(id =>
+          state.batches.find(b => String(b._id) === String(id)) || id
+        );
         state.users.unshift(newUser);
         if (newUser.role === 'trainee') {
           state.trainees.unshift(newUser);
@@ -762,7 +766,7 @@ const adminSlice = createSlice({
         // Update in all three lists so UI stays in sync regardless of which page used it
         const patch = (arr) => {
           const i = arr.findIndex(u => String(u._id) === id);
-          if (i !== -1) arr[i] = updated;
+          if (i !== -1) arr[i].isActive = updated.isActive; 
         };
         patch(state.users);
         patch(state.trainees);
@@ -850,12 +854,23 @@ const adminSlice = createSlice({
       // ── assignTrainerToBatch ──────────────────────────────────────────────
       .addCase(assignTrainerToBatch.fulfilled, (state, action) => {
         const { trainerId, batchId } = action.payload;
-        // Update trainer in trainers list
+
+        // Update trainer in trainers list (supports multi-batch)
         const trainerIndex = state.trainers.findIndex(t => String(t._id) === String(trainerId));
         if (trainerIndex !== -1) {
+          const t = state.trainers[trainerIndex];
+
+          // Ensure array exists and append uniquely
+          const existing = Array.isArray(t.batchIds) ? t.batchIds : [];
+          const next = Array.from(new Set(existing.map(x => String(x))));
+          if (!next.includes(String(batchId))) next.push(String(batchId));
+
+          state.trainers[trainerIndex].batchIds = next;
+          // Keep legacy single-field for older UI paths
           state.trainers[trainerIndex].batchId = batchId;
         }
-        // Update batch in batches list
+
+        // Update batch in batches list (single trainerId remains)
         const batchIndex = state.batches.findIndex(b => String(b._id) === String(batchId));
         if (batchIndex !== -1) {
           state.batches[batchIndex].trainerId = trainerId;

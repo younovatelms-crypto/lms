@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { store } from '../../app/store';
 import {
@@ -39,8 +39,8 @@ const UserManagement = () => {
   };
 
   const filteredUsers = users.filter(user => {
-    const matchesSearch = user.name?.toLowerCase().includes(search.toLowerCase()) || 
-                         user.email?.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = user.name?.toLowerCase().includes(search.toLowerCase()) ||
+      user.email?.toLowerCase().includes(search.toLowerCase());
     const matchesRole = roleFilter === 'All Roles' || user.role === roleFilter.toLowerCase();
     return matchesSearch && matchesRole;
   });
@@ -82,21 +82,21 @@ const UserManagement = () => {
 
   const handleSaveUser = async (userData) => {
     console.log('handleSaveUser called with:', { editingUser, userData }); // Debug log
-    
+
     try {
       if (editingUser) {
         // For editing, we need a valid user ID
         const userId = editingUser._id || editingUser.id;
         console.log('Attempting to update user with ID:', userId);
-        
+
         if (!userId) {
           showToast('Error: No user ID found for editing', 'error');
           return;
         }
-        
+
         // Get token from Redux state
         const token = authToken || localStorage.getItem('token') || sessionStorage.getItem('token');
-        
+
         // Make direct API call instead of using Redux
         const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/api/admin/users/${userId}`, {
           method: 'PUT',
@@ -106,14 +106,14 @@ const UserManagement = () => {
           },
           body: JSON.stringify(userData)
         });
-        
+
         const result = await response.json();
         console.log('Direct API response:', result);
-        
+
         if (!response.ok) {
           throw new Error(result.message || 'Failed to update user');
         }
-        
+
         // Refresh the users list
         dispatch(fetchUsers());
         showToast('User updated successfully');
@@ -122,7 +122,7 @@ const UserManagement = () => {
         await dispatch(createUser(userData)).unwrap();
         showToast('User created successfully');
       }
-      
+
       setShowModal(false);
       setEditingUser(null);
     } catch (err) {
@@ -140,8 +140,8 @@ const UserManagement = () => {
   }
 
   return (
-    <div style={{ 
-      padding: window.innerWidth <= 768 ? '8px 12px 12px 12px' : '12px 16px 16px 16px', 
+    <div style={{
+      padding: window.innerWidth <= 768 ? '8px 12px 12px 12px' : '12px 16px 16px 16px',
       fontFamily: 'Inter, system-ui, sans-serif',
       background: '#F8FAFC',
       height: '100vh',
@@ -151,27 +151,27 @@ const UserManagement = () => {
     }}>
       {/* Header */}
       <div style={{ marginBottom: window.innerWidth <= 768 ? 12 : 16, flexShrink: 0 }}>
-        <h1 style={{ 
-          fontSize: window.innerWidth <= 768 ? 18 : 22, 
-          fontWeight: 700, 
-          color: '#1E293B', 
+        <h1 style={{
+          fontSize: window.innerWidth <= 768 ? 18 : 22,
+          fontWeight: 700,
+          color: '#1E293B',
           margin: '0 0 3px'
         }}>
           User & Role Management
         </h1>
-        <p style={{ 
-          fontSize: window.innerWidth <= 768 ? 11 : 13, 
-          color: '#64748B', 
-          margin: 0 
+        <p style={{
+          fontSize: window.innerWidth <= 768 ? 11 : 13,
+          color: '#64748B',
+          margin: 0
         }}>
           Manage platform users, roles, and YBLP mentor assignments
         </p>
       </div>
 
       {/* Filters */}
-      <div style={{ 
-        display: 'flex', 
-        alignItems: 'center', 
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
         justifyContent: 'space-between',
         marginBottom: 12,
         gap: 16,
@@ -179,9 +179,9 @@ const UserManagement = () => {
         flexShrink: 0,
         flexDirection: window.innerWidth <= 768 ? 'column' : 'row'
       }}>
-        <div style={{ 
-          display: 'flex', 
-          gap: window.innerWidth <= 768 ? 8 : 16, 
+        <div style={{
+          display: 'flex',
+          gap: window.innerWidth <= 768 ? 8 : 16,
           alignItems: 'center',
           flexWrap: 'wrap',
           width: window.innerWidth <= 768 ? '100%' : 'auto'
@@ -200,7 +200,7 @@ const UserManagement = () => {
               outline: 'none'
             }}
           />
-          
+
           <select
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value)}
@@ -273,89 +273,89 @@ const UserManagement = () => {
         marginBottom: '16px',
         minHeight: '500px'
       }}>
-        <table style={{ 
-          width: '100%', 
-          borderCollapse: 'collapse', 
+        <table style={{
+          width: '100%',
+          borderCollapse: 'collapse',
           flex: 1,
           minWidth: window.innerWidth <= 768 ? '800px' : 'auto'
         }}>
           <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
             <tr style={{ background: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>
-              <th style={{ 
-                padding: '12px 16px', 
-                textAlign: 'left', 
-                fontSize: 12, 
-                fontWeight: 600, 
-                color: '#64748B', 
+              <th style={{
+                padding: '12px 16px',
+                textAlign: 'left',
+                fontSize: 12,
+                fontWeight: 600,
+                color: '#64748B',
                 textTransform: 'uppercase'
               }}>NAME</th>
-              <th style={{ 
-                padding: '12px 16px', 
-                textAlign: 'left', 
-                fontSize: 12, 
-                fontWeight: 600, 
-                color: '#64748B', 
+              <th style={{
+                padding: '12px 16px',
+                textAlign: 'left',
+                fontSize: 12,
+                fontWeight: 600,
+                color: '#64748B',
                 textTransform: 'uppercase'
               }}>EMAIL</th>
-              <th style={{ 
-                padding: '12px 16px', 
-                textAlign: 'left', 
-                fontSize: 12, 
-                fontWeight: 600, 
-                color: '#64748B', 
+              <th style={{
+                padding: '12px 16px',
+                textAlign: 'left',
+                fontSize: 12,
+                fontWeight: 600,
+                color: '#64748B',
                 textTransform: 'uppercase'
               }}>ROLE</th>
-              <th style={{ 
-                padding: '12px 16px', 
-                textAlign: 'left', 
-                fontSize: 12, 
-                fontWeight: 600, 
-                color: '#64748B', 
+              <th style={{
+                padding: '12px 16px',
+                textAlign: 'left',
+                fontSize: 12,
+                fontWeight: 600,
+                color: '#64748B',
                 textTransform: 'uppercase'
               }}>PROGRAM</th>
-              <th style={{ 
-                padding: '12px 16px', 
-                textAlign: 'left', 
-                fontSize: 12, 
-                fontWeight: 600, 
-                color: '#64748B', 
+              <th style={{
+                padding: '12px 16px',
+                textAlign: 'left',
+                fontSize: 12,
+                fontWeight: 600,
+                color: '#64748B',
                 textTransform: 'uppercase'
               }}>BATCH</th>
-              <th style={{ 
-                padding: '12px 16px', 
-                textAlign: 'left', 
-                fontSize: 12, 
-                fontWeight: 600, 
-                color: '#64748B', 
+              <th style={{
+                padding: '12px 16px',
+                textAlign: 'left',
+                fontSize: 12,
+                fontWeight: 600,
+                color: '#64748B',
                 textTransform: 'uppercase'
               }}>STATUS</th>
-              <th style={{ 
-                padding: '12px 16px', 
-                textAlign: 'center', 
-                fontSize: 12, 
-                fontWeight: 600, 
-                color: '#64748B', 
+              <th style={{
+                padding: '12px 16px',
+                textAlign: 'center',
+                fontSize: 12,
+                fontWeight: 600,
+                color: '#64748B',
                 textTransform: 'uppercase'
               }}>ACTIONS</th>
             </tr>
           </thead>
           <tbody>
             {currentUsers.map((user, index) => (
-              <tr key={user._id || user.id || index} style={{ 
+              <tr key={user._id || user.id || index} style={{
                 borderBottom: '1px solid #E2E8F0',
                 background: index % 2 === 0 ? '#fff' : '#FAFBFC',
                 transition: 'background-color 0.2s ease'
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#F1F5F9';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = index % 2 === 0 ? '#fff' : '#FAFBFC';
-              }}>
-                <td style={{ 
-                  padding: window.innerWidth <= 768 ? '6px 10px' : '10px 14px', 
-                  fontSize: window.innerWidth <= 768 ? 12 : 13, 
-                  fontWeight: 500, 
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#F1F5F9';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = index % 2 === 0 ? '#fff' : '#FAFBFC';
+                }}>
+                <td style={{
+                  padding: window.innerWidth <= 768 ? '6px 10px' : '10px 14px',
+                  fontSize: window.innerWidth <= 768 ? 12 : 13,
+                  fontWeight: 500,
                   color: '#1E293B',
                   height: '45px'
                 }}>
@@ -377,15 +377,15 @@ const UserManagement = () => {
                     <span>{user.name || '—'}</span>
                   </div>
                 </td>
-                <td style={{ 
-                  padding: '12px 16px', 
-                  fontSize: 14, 
+                <td style={{
+                  padding: '12px 16px',
+                  fontSize: 14,
                   color: '#64748B',
                   height: '50px'
                 }}>
                   {user.email || '—'}
                 </td>
-                <td style={{ 
+                <td style={{
                   padding: '12px 16px',
                   height: '50px'
                 }}>
@@ -401,9 +401,9 @@ const UserManagement = () => {
                     {user.role?.charAt(0).toUpperCase() + user.role?.slice(1) || 'N/A'}
                   </span>
                 </td>
-                <td style={{ 
-                  padding: '12px 16px', 
-                  fontSize: 14, 
+                <td style={{
+                  padding: '12px 16px',
+                  fontSize: 14,
                   color: '#64748B',
                   height: '50px'
                 }}>
@@ -419,9 +419,9 @@ const UserManagement = () => {
                     YIEP
                   </span>
                 </td>
-                <td style={{ 
-                  padding: '12px 16px', 
-                  fontSize: 14, 
+                <td style={{
+                  padding: '12px 16px',
+                  fontSize: 14,
                   color: '#64748B',
                   height: '50px'
                 }}>
@@ -441,24 +441,24 @@ const UserManagement = () => {
                     <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>Not assigned</span>
                   )} */}
                   {user.batchIds?.length > 0 ? (
-  <span style={{
-    padding: '4px 8px',
-    borderRadius: 8,
-    fontSize: 11,
-    fontWeight: 500,
-    background: '#F0F9FF',
-    color: '#0369A1',
-    border: '1px solid #BAE6FD'
-  }}>
-    {user.batchIds.map(batch => batch.name).join(', ')}
-  </span>
-) : (
-  <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>
-    Not assigned
-  </span>
-)}
+                    <span style={{
+                      padding: '4px 8px',
+                      borderRadius: 8,
+                      fontSize: 11,
+                      fontWeight: 500,
+                      background: '#F0F9FF',
+                      color: '#0369A1',
+                      border: '1px solid #BAE6FD'
+                    }}>
+                      {user.batchIds.map(batch => batch.name).join(', ')}
+                    </span>
+                  ) : (
+                    <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>
+                      Not assigned
+                    </span>
+                  )}
                 </td>
-                <td style={{ 
+                <td style={{
                   padding: '12px 16px',
                   height: '50px'
                 }}>
@@ -508,7 +508,7 @@ const UserManagement = () => {
                     >
                       {window.innerWidth <= 768 ? '✏️' : '✏️ Edit'}
                     </button>
-                    
+
                     <button
                       onClick={() => handleToggleStatus(user._id || user.id || `temp-${index}`, user.isActive)}
                       title={user.isActive ? 'Disable user' : 'Enable user'}
@@ -532,7 +532,7 @@ const UserManagement = () => {
                     >
                       {user.isActive ? '❌' : '✅'}
                     </button>
-                    
+
                     <button
                       onClick={() => handleDeleteUser(user._id || user.id || `temp-${index}`, user.name)}
                       title="Delete user"
@@ -564,7 +564,7 @@ const UserManagement = () => {
             ))}
             {/* Fill remaining space with empty rows only when there's data */}
             {currentUsers.length > 0 && Array.from({ length: Math.max(0, 10 - currentUsers.length) }, (_, i) => (
-              <tr key={`empty-${i}`} style={{ 
+              <tr key={`empty-${i}`} style={{
                 background: (currentUsers.length + i) % 2 === 0 ? '#fff' : '#FAFBFC',
                 height: '45px'
               }}>
@@ -604,7 +604,7 @@ const UserManagement = () => {
           <div style={{ fontSize: '14px', color: '#64748B' }}>
             Showing {startIndex + 1}-{Math.min(endIndex, filteredUsers.length)} of {filteredUsers.length} users
           </div>
-          
+
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <button
               onClick={() => handlePageChange(currentPage - 1)}
@@ -622,7 +622,7 @@ const UserManagement = () => {
             >
               ← Previous
             </button>
-            
+
             {Array.from({ length: totalPages }, (_, i) => i + 1)
               .filter(page => {
                 const distance = Math.abs(page - currentPage);
@@ -631,7 +631,7 @@ const UserManagement = () => {
               .map((page, index, array) => {
                 const prevPage = array[index - 1];
                 const showEllipsis = prevPage && page - prevPage > 1;
-                
+
                 return (
                   <React.Fragment key={page}>
                     {showEllipsis && (
@@ -657,7 +657,7 @@ const UserManagement = () => {
                   </React.Fragment>
                 );
               })}
-            
+
             <button
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage === totalPages}
@@ -745,55 +745,46 @@ const UserModal = ({ user, batches, onClose, onSave }) => {
     email: user?.email || '',
     role: user?.role || 'trainee',
     password: '',
-    // batchId: user?.batchId?._id || user?.batchId || '' // Handle both object and string
-    batchId: user?.batchIds?.[0]?._id || ''
+    batchIds: user?.batchIds?.map(b => b._id || b) || []
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [batchDropdownOpen, setBatchDropdownOpen] = useState(false);
 
-  // Debug log to see user structure
-  console.log('UserModal user object:', user);
+  const dropdownRef = useRef(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setBatchDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const validateForm = () => {
     const newErrors = {};
-    
-    if (!formData.name.trim()) {
-      newErrors.name = 'Name is required';
-    }
-    
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+    if (!formData.name.trim()) newErrors.name = 'Name is required';
+    if (!formData.email.trim()) newErrors.email = 'Email is required';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email))
       newErrors.email = 'Please enter a valid email address';
-    }
-    
-    if (!formData.role) {
-      newErrors.role = 'Role is required';
-    }
-    
-    if (!user && !formData.password.trim()) {
+    if (!formData.role) newErrors.role = 'Role is required';
+    if (!user && !formData.password.trim())
       newErrors.password = 'Password is required';
-    } else if (!user && formData.password.length < 6) {
+    else if (!user && formData.password.length < 6)
       newErrors.password = 'Password must be at least 6 characters';
-    }
-    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
-    }
-    
+    if (!validateForm()) return;
     setLoading(true);
-    const submitData = { ...formData,batchIds: formData.batchId ? [formData.batchId] : [] };
-    if (user && !submitData.password) {
-      delete submitData.password;
-    }
-    
+    const submitData = { ...formData };
+    if (user && !submitData.password) delete submitData.password;
     try {
       await onSave(submitData);
     } catch (err) {
@@ -805,213 +796,235 @@ const UserModal = ({ user, batches, onClose, onSave }) => {
 
   const handleInputChange = (field, value) => {
     setFormData({ ...formData, [field]: value });
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors({ ...errors, [field]: '' });
-    }
+    if (errors[field]) setErrors({ ...errors, [field]: '' });
+  };
+
+  const toggleBatch = (batchId) => {
+    const exists = formData.batchIds.includes(batchId);
+    const updated = exists
+      ? formData.batchIds.filter(id => id !== batchId)
+      : [...formData.batchIds, batchId];
+    handleInputChange('batchIds', updated);
+  };
+
+  const removeBatch = (batchId) => {
+    handleInputChange('batchIds', formData.batchIds.filter(id => id !== batchId));
+  };
+
+  const selectedBatches = batches?.filter(b => formData.batchIds.includes(b._id)) || [];
+
+  const isMobile = window.innerWidth <= 768;
+  const inputStyle = {
+    width: '100%',
+    padding: isMobile ? '8px 10px' : '10px 12px',
+    border: '1px solid #E2E8F0',
+    borderRadius: 8,
+    fontSize: isMobile ? 13 : 14,
+    outline: 'none',
+    boxSizing: 'border-box'
+  };
+  const labelStyle = {
+    display: 'block',
+    marginBottom: 4,
+    fontSize: isMobile ? 13 : 14,
+    fontWeight: 500
   };
 
   return (
     <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
       background: 'rgba(0,0,0,0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
       zIndex: 1000,
-      padding: window.innerWidth <= 768 ? '20px' : '0'
+      padding: isMobile ? '20px' : '0'
     }}>
       <div style={{
-        background: '#fff',
-        borderRadius: 12,
-        padding: window.innerWidth <= 768 ? 16 : 24,
-        width: '100%',
-        maxWidth: window.innerWidth <= 768 ? '100%' : 500,
-        maxHeight: '90vh',
-        overflow: 'auto'
+        background: '#fff', borderRadius: 12,
+        padding: isMobile ? 16 : 24,
+        width: '100%', maxWidth: isMobile ? '100%' : 500,
+        maxHeight: '90vh', overflow: 'auto'
       }}>
-        <h3 style={{ margin: '0 0 20px', fontSize: window.innerWidth <= 768 ? 16 : 18, fontWeight: 600 }}>
+        <h3 style={{ margin: '0 0 20px', fontSize: isMobile ? 16 : 18, fontWeight: 600 }}>
           {user ? 'Edit User' : 'Create New User'}
         </h3>
-        
+
         <form onSubmit={handleSubmit}>
+          {/* Name */}
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 4, fontSize: window.innerWidth <= 768 ? 13 : 14, fontWeight: 500 }}>
-              Name *
-            </label>
+            <label style={labelStyle}>Name *</label>
             <input
               type="text"
               value={formData.name}
-              onChange={(e) => handleInputChange('name', e.target.value)}
-              style={{
-                width: '100%',
-                padding: window.innerWidth <= 768 ? '8px 10px' : '10px 12px',
-                border: `1px solid ${errors.name ? '#DC2626' : '#E2E8F0'}`,
-                borderRadius: 8,
-                fontSize: window.innerWidth <= 768 ? 13 : 14,
-                outline: 'none'
-              }}
+              onChange={e => handleInputChange('name', e.target.value)}
+              style={{ ...inputStyle, border: `1px solid ${errors.name ? '#DC2626' : '#E2E8F0'}` }}
             />
-            {errors.name && (
-              <div style={{ color: '#DC2626', fontSize: window.innerWidth <= 768 ? 11 : 12, marginTop: 4 }}>
-                {errors.name}
-              </div>
-            )}
+            {errors.name && <div style={{ color: '#DC2626', fontSize: 12, marginTop: 4 }}>{errors.name}</div>}
           </div>
 
+          {/* Email */}
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 4, fontSize: window.innerWidth <= 768 ? 13 : 14, fontWeight: 500 }}>
-              Email *
-            </label>
+            <label style={labelStyle}>Email *</label>
             <input
               type="email"
               value={formData.email}
-              onChange={(e) => handleInputChange('email', e.target.value)}
-              style={{
-                width: '100%',
-                padding: window.innerWidth <= 768 ? '8px 10px' : '10px 12px',
-                border: `1px solid ${errors.email ? '#DC2626' : '#E2E8F0'}`,
-                borderRadius: 8,
-                fontSize: window.innerWidth <= 768 ? 13 : 14,
-                outline: 'none'
-              }}
+              onChange={e => handleInputChange('email', e.target.value)}
+              style={{ ...inputStyle, border: `1px solid ${errors.email ? '#DC2626' : '#E2E8F0'}` }}
             />
-            {errors.email && (
-              <div style={{ color: '#DC2626', fontSize: window.innerWidth <= 768 ? 11 : 12, marginTop: 4 }}>
-                {errors.email}
-              </div>
-            )}
+            {errors.email && <div style={{ color: '#DC2626', fontSize: 12, marginTop: 4 }}>{errors.email}</div>}
           </div>
 
+          {/* Role */}
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 4, fontSize: window.innerWidth <= 768 ? 13 : 14, fontWeight: 500 }}>
-              Role *
-            </label>
+            <label style={labelStyle}>Role *</label>
             <select
               value={formData.role}
-              onChange={(e) => handleInputChange('role', e.target.value)}
-              style={{
-                width: '100%',
-                padding: window.innerWidth <= 768 ? '8px 10px' : '10px 12px',
-                border: `1px solid ${errors.role ? '#DC2626' : '#E2E8F0'}`,
-                borderRadius: 8,
-                fontSize: window.innerWidth <= 768 ? 13 : 14,
-                outline: 'none',
-                background: '#fff'
-              }}
+              onChange={e => handleInputChange('role', e.target.value)}
+              style={{ ...inputStyle, border: `1px solid ${errors.role ? '#DC2626' : '#E2E8F0'}`, background: '#fff' }}
             >
               <option value="">Select Role</option>
               <option value="trainee">Trainee</option>
               <option value="trainer">Trainer</option>
               <option value="hr">HR</option>
             </select>
-            {errors.role && (
-              <div style={{ color: '#DC2626', fontSize: window.innerWidth <= 768 ? 11 : 12, marginTop: 4 }}>
-                {errors.role}
+            {errors.role && <div style={{ color: '#DC2626', fontSize: 12, marginTop: 4 }}>{errors.role}</div>}
+          </div>
+
+          {/* Batch Multiselect */}
+          <div style={{ marginBottom: 16 }} ref={dropdownRef}>
+            <label style={labelStyle}>Batches</label>
+
+            {/* Selected tags */}
+            {selectedBatches.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                {selectedBatches.map(batch => (
+                  <span key={batch._id} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    padding: '3px 8px',
+                    background: '#EEF2FF', color: '#3730A3',
+                    border: '1px solid #C7D2FE',
+                    borderRadius: 20, fontSize: 12, fontWeight: 500
+                  }}>
+                    {batch.name}
+                    <span
+                      onClick={() => removeBatch(batch._id)}
+                      style={{ cursor: 'pointer', fontWeight: 700, fontSize: 14, lineHeight: 1, color: '#6366F1' }}
+                    >×</span>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Dropdown trigger */}
+            <div
+              onClick={() => setBatchDropdownOpen(prev => !prev)}
+              style={{
+                ...inputStyle,
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                cursor: 'pointer', userSelect: 'none',
+                color: selectedBatches.length === 0 ? '#94A3B8' : '#1E293B',
+                background: '#fff'
+              }}
+            >
+              <span>{selectedBatches.length === 0 ? 'Select batches...' : `${selectedBatches.length} batch${selectedBatches.length > 1 ? 'es' : ''} selected`}</span>
+              <span style={{ fontSize: 10, color: '#64748B' }}>{batchDropdownOpen ? '▲' : '▼'}</span>
+            </div>
+
+            {/* Dropdown list */}
+            {batchDropdownOpen && (
+              <div style={{
+                position: 'absolute',
+                background: '#fff',
+                border: '1px solid #E2E8F0',
+                borderRadius: 8,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                zIndex: 1100,
+                width: isMobile ? 'calc(100% - 72px)' : '452px',
+                maxHeight: 200,
+                overflowY: 'auto',
+                marginTop: 4
+              }}>
+                {batches?.length === 0 && (
+                  <div style={{ padding: '12px 16px', color: '#94A3B8', fontSize: 13 }}>No batches available</div>
+                )}
+                {batches?.map(batch => {
+                  const isSelected = formData.batchIds.includes(batch._id);
+                  return (
+                    <div
+                      key={batch._id}
+                      onClick={() => toggleBatch(batch._id)}
+                      style={{
+                        padding: '10px 14px',
+                        cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        background: isSelected ? '#EEF2FF' : '#fff',
+                        borderBottom: '1px solid #F1F5F9',
+                        fontSize: 14,
+                        color: isSelected ? '#3730A3' : '#1E293B',
+                        transition: 'background 0.15s'
+                      }}
+                      onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#F8FAFC'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = isSelected ? '#EEF2FF' : '#fff'; }}
+                    >
+                      {/* Checkbox */}
+                      <div style={{
+                        width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                        border: `2px solid ${isSelected ? '#4F46E5' : '#CBD5E1'}`,
+                        background: isSelected ? '#4F46E5' : '#fff',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center'
+                      }}>
+                        {isSelected && <span style={{ color: '#fff', fontSize: 10, fontWeight: 700 }}>✓</span>}
+                      </div>
+                      {batch.name}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
 
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 4, fontSize: window.innerWidth <= 768 ? 13 : 14, fontWeight: 500 }}>
-              Batch
-            </label>
-            <select
-              value={formData.batchId}
-              onChange={(e) => handleInputChange('batchId', e.target.value)}
-              style={{
-                width: '100%',
-                padding: window.innerWidth <= 768 ? '8px 10px' : '10px 12px',
-                border: '1px solid #E2E8F0',
-                borderRadius: 8,
-                fontSize: window.innerWidth <= 768 ? 13 : 14,
-                outline: 'none',
-                background: '#fff'
-              }}
-            >
-              <option value="">Select Batch</option>
-              {batches?.map(batch => (
-                <option key={batch._id} value={batch._id}>{batch.name}</option>
-              ))}
-            </select>
-          </div>
-
+          {/* Password (create only) */}
           {!user && (
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 4, fontSize: window.innerWidth <= 768 ? 13 : 14, fontWeight: 500 }}>
-                Password *
-              </label>
+              <label style={labelStyle}>Password *</label>
               <input
                 type="password"
                 value={formData.password}
-                onChange={(e) => handleInputChange('password', e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: window.innerWidth <= 768 ? '8px 10px' : '10px 12px',
-                  border: `1px solid ${errors.password ? '#DC2626' : '#E2E8F0'}`,
-                  borderRadius: 8,
-                  fontSize: window.innerWidth <= 768 ? 13 : 14,
-                  outline: 'none'
-                }}
+                onChange={e => handleInputChange('password', e.target.value)}
+                style={{ ...inputStyle, border: `1px solid ${errors.password ? '#DC2626' : '#E2E8F0'}` }}
               />
-              {errors.password && (
-                <div style={{ color: '#DC2626', fontSize: window.innerWidth <= 768 ? 11 : 12, marginTop: 4 }}>
-                  {errors.password}
-                </div>
-              )}
+              {errors.password && <div style={{ color: '#DC2626', fontSize: 12, marginTop: 4 }}>{errors.password}</div>}
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 24, flexDirection: window.innerWidth <= 768 ? 'column' : 'row' }}>
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={loading}
-              style={{
-                padding: window.innerWidth <= 768 ? '12px 20px' : '10px 20px',
-                background: 'transparent',
-                color: '#64748B',
-                border: '1px solid #E2E8F0',
-                borderRadius: 8,
-                fontSize: 14,
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.5 : 1,
-                width: window.innerWidth <= 768 ? '100%' : 'auto'
-              }}
-            >
+          {/* Actions */}
+          <div style={{
+            display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 24,
+            flexDirection: isMobile ? 'column' : 'row'
+          }}>
+            <button type="button" onClick={onClose} disabled={loading} style={{
+              padding: isMobile ? '12px 20px' : '10px 20px',
+              background: 'transparent', color: '#64748B',
+              border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.5 : 1,
+              width: isMobile ? '100%' : 'auto'
+            }}>
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                padding: window.innerWidth <= 768 ? '12px 20px' : '10px 20px',
-                background: loading ? '#94A3B8' : '#1E40AF',
-                color: '#fff',
-                border: 'none',
-                borderRadius: 8,
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: loading ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                justifyContent: 'center',
-                width: window.innerWidth <= 768 ? '100%' : 'auto'
-              }}
-            >
+            <button type="submit" disabled={loading} style={{
+              padding: isMobile ? '12px 20px' : '10px 20px',
+              background: loading ? '#94A3B8' : '#1E40AF',
+              color: '#fff', border: 'none', borderRadius: 8,
+              fontSize: 14, fontWeight: 600,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center',
+              width: isMobile ? '100%' : 'auto'
+            }}>
               {loading && (
                 <div style={{
-                  width: 16,
-                  height: 16,
-                  border: '2px solid transparent',
-                  borderTop: '2px solid #fff',
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite'
+                  width: 16, height: 16,
+                  border: '2px solid transparent', borderTop: '2px solid #fff',
+                  borderRadius: '50%', animation: 'spin 1s linear infinite'
                 }} />
               )}
               {loading ? 'Saving...' : (user ? 'Update' : 'Create')} User
