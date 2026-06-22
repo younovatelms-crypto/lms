@@ -5,6 +5,7 @@ const Session    = require('../models/Session');
 const { generateLiveKitToken } = require('../services/livekitService');
 const { emitToRole } = require('../services/socketService');
 const { protect, authorize } = require('../middleware/auth');
+const sessionCtrl = require('../controllers/sessionController');
 
 const router = express.Router();
 router.use(protect);
@@ -66,46 +67,21 @@ router.delete('/:id', authorize('admin'), async (req, res) => {
 });
 
 // POST /api/sessions/:id/start  [trainer]
-//   Response: { success, token (LiveKit JWT), roomName }
-router.post('/:id/start', authorize('trainer'), async (req, res) => {
-  const session = await Session.findById(req.params.id);
-  if (!session) return res.status(404).json({ success: false, message: 'Session not found' });
-  if (session.trainerId.toString() !== req.user._id.toString())
-    return res.status(403).json({ success: false, message: 'This is not your session' });
-
-  const roomName = `session-${session._id}`;
-  const token    = await generateLiveKitToken(req.user, roomName, 'publisher');
-
-  session.status    = 'live';
-  session.roomName  = roomName;
-  session.startedAt = new Date();
-  await session.save();
-
-  emitToRole('trainee', 'session:status', { id: session._id, status: 'live', roomName });
-  return res.json({ success: true, token, roomName });
-});
+// Delegates to the shared goLive controller so the room name, recording (egress)
+// and trainee notifications all use the SAME canonical room ("session_<id>") as
+// the trainee join path. (Previously this minted a "session-<id>" room with a
+// broken token call, leaving the trainer alone in a room no trainee could reach.)
+router.post('/:id/start', authorize('trainer'), sessionCtrl.goLive);
 
 // POST /api/sessions/:id/join  [trainee]
-//   Response: { success, token (LiveKit JWT), roomName }
-router.post('/:id/join', authorize('trainee'), async (req, res) => {
-  const session = await Session.findById(req.params.id);
-  if (!session) return res.status(404).json({ success: false, message: 'Session not found' });
-  if (session.status !== 'live')
-    return res.status(400).json({ success: false, message: 'Session is not live yet' });
-  const token = await generateLiveKitToken(req.user, session.roomName, 'subscriber');
-  return res.json({ success: true, token, roomName: session.roomName });
-});
+// Delegates to the shared joinSession controller (canonical room + enrollment/
+// passcode checks). Previously used the persisted session.roomName, which could
+// be a stale "session-<id>" value that did not match the trainer's room.
+router.post('/:id/join', authorize('trainee'), sessionCtrl.joinSession);
 
 // POST /api/sessions/:id/end  [trainer]
-router.post('/:id/end', authorize('trainer'), async (req, res) => {
-  const session = await Session.findById(req.params.id);
-  if (!session) return res.status(404).json({ success: false, message: 'Session not found' });
-  session.status  = 'completed';
-  session.endedAt = new Date();
-  if (req.body.recordingUrl) session.recordingUrl = req.body.recordingUrl;
-  await session.save();
-  emitToRole('trainee', 'session:status', { id: session._id, status: 'completed' });
-  return res.json({ success: true, message: 'Session ended', session });
-});
+// Delegates to endSession so LiveKit egress (recording) is stopped and the
+// recording webhook can finalise the file.
+router.post('/:id/end', authorize('trainer'), sessionCtrl.endSession);
 
 module.exports = router;

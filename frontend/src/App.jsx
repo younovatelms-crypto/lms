@@ -157,13 +157,10 @@ function App() {
             <Route path="attendance"  element={<TrainerAttendance />} />
             <Route path="assignments" element={<TrainerAssignments />} />
             <Route path="settings"     element={<TrainerSettings />} />
-
-               
             <Route path="sessions/new"      element={<SessionDetail mode="create" />} />
             <Route path="sessions/:id"      element={<SessionDetail mode="view" />} />
             <Route path="sessions/:id/edit" element={<SessionDetail mode="edit" />} />
              <Route path="batches/view/:id" element={<BatchDetails />} />
-
             <Route path="profile" element={<Profile />} />
             <Route index element={<Navigate to="dashboard" replace />} />
           </Route>
@@ -179,15 +176,10 @@ function App() {
              <Route path="profile" element={<Profile />} />
               <Route path="courses" element={<Trainee_Courses />} />
               <Route path="coursess/:id" element={<Trainee_CourseDetail />} />
-
               <Route path="coursess/:courseId" element={<Trainee_CourseDetail />} />
               <Route path="coursess/:courseId/segment/:segmentId" element={<CourseSegment />} />
               <Route path="coursess/:courseId/segment/:segmentId/:topicId" element={<CourseTopic />} />
-              <Route path="coursess/:courseId/segment/:segmentId/:topicId/:lessonId" element={<LessonPlayer />} />
-              
-
-
-              
+              <Route path="coursess/:courseId/segment/:segmentId/:topicId/:lessonId" element={<LessonPlayer />} />      
             <Route index element={<Navigate to="dashboard" replace />} />
           </Route>
         </Route>

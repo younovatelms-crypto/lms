@@ -89,9 +89,11 @@ router.post('/sessions/:id/join', async (req, res) => {
     }
 
     // ── Canonical room (MATCHES the trainer's go-live room) ──────────────────
-    // goLive saved session.roomName = roomNameFor(session._id) = "session_<id>".
-    // Fall back to roomNameFor in case roomName was not persisted.
-    const roomName = session.roomName || roomNameFor(session._id);
+    // Always recompute roomNameFor(session._id) rather than trusting the
+    // persisted session.roomName — an older code path may have stored a room
+    // string in a different format ("session-<id>"), which would silently put
+    // the trainee in a DIFFERENT room from the trainer.
+    const roomName = roomNameFor(session._id);
 
     // Trainee may publish camera/mic/screen + chat, but is NOT a room admin and
     // cannot trigger recording.
