@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import {
   fetchDashboard,
@@ -9,6 +10,7 @@ import {
 
 const Dashboard = () => {
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const dashboard = useAppSelector(selectAdminDashboard);
   const status = useAppSelector(selectAdminStatus);
   const error = useAppSelector(selectAdminError);
@@ -39,6 +41,14 @@ const Dashboard = () => {
 
   // Use API data for recent activity
   const recentActivity = dashboard?.recentActivity ?? [];
+
+  // Navigate to BatchDetails page when a batch row is clicked
+  const handleBatchClick = (batch) => {
+    const batchId = batch?.batchId || batch?._id || batch?.id;
+    if (batchId) {
+      navigate(`/admin/batches/view/${batchId}`);
+    }
+  };
 
   if (status === 'loading' && !dashboard) {
     return (
@@ -122,7 +132,7 @@ const Dashboard = () => {
         gridTemplateColumns: window.innerWidth <= 480 ? 'repeat(1, 1fr)' : 
                            window.innerWidth <= 768 ? 'repeat(2, 1fr)' : 
                            window.innerWidth <= 1024 ? 'repeat(4, 1fr)' : 
-                           'repeat(7, 1fr)', 
+                           'repeat(4, 1fr)', 
         gap: window.innerWidth <= 768 ? 12 : 14, 
         marginBottom: 16 
       }}>
@@ -140,20 +150,20 @@ const Dashboard = () => {
           icon="🏠"
           color="#22C55E"
         />
-        <KPICard
+        {/* <KPICard
           title="PIPELINE ELIGIBLE"
           value={pipelineEligible}
           subtitle="Score ≥ 60"
           icon="📈"
           color="#22C55E"
-        />
-        <KPICard
+        /> */}
+        {/* <KPICard
           title="PLACEMENT READY"
           value={placementReady}
           subtitle="Score ≥ 80"
           icon="✅"
           color="#22C55E"
-        />
+        /> */}
         <KPICard
           title="ATTENDANCE RISK"
           value={attendanceRisk}
@@ -161,13 +171,13 @@ const Dashboard = () => {
           icon="⚠️"
           color="#F59E0B"
         />
-        <KPICard
+        {/* <KPICard
           title="RESIDENCY ACTIVE"
           value={residencyActive}
           subtitle="YBLP Month 6"
           icon="🏢"
           color="#06B6D4"
-        />
+        /> */}
         <KPICard
           title="BRANCH READY"
           value={branchReady}
@@ -206,10 +216,11 @@ const Dashboard = () => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {batchTrends.map((batch, idx) => (
                   <ProgressRow 
-                    key={idx} 
+                    key={batch.batchId || batch._id || batch.id || idx} 
                     label={batch.name || `Batch ${idx + 1}`} 
                     pct={batch.pct || batch.attendanceRate || 0} 
                     color={batch.color || getProgressColor(batch.pct || batch.attendanceRate || 0)}
+                    onClick={() => handleBatchClick(batch)}
                   />
                 ))}
               </div>
@@ -307,9 +318,22 @@ const getProgressColor = (pct) => {
   return '#EF4444';
 };
 
-// Progress Row Component for batch trends - Responsive
-const ProgressRow = ({ label, pct, color }) => (
-  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+// Progress Row Component for batch trends - Responsive, clickable
+const ProgressRow = ({ label, pct, color, onClick }) => (
+  <div 
+    onClick={onClick}
+    style={{ 
+      display: 'flex', 
+      alignItems: 'center', 
+      gap: 12,
+      cursor: onClick ? 'pointer' : 'default',
+      padding: '4px 6px',
+      borderRadius: 8,
+      transition: 'background 0.15s ease'
+    }}
+    onMouseEnter={(e) => { if (onClick) e.currentTarget.style.background = '#F8FAFC'; }}
+    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+  >
     <span style={{ 
       fontSize: window.innerWidth <= 768 ? 12 : 13, 
       color: '#0F172A', 

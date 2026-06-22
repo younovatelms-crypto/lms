@@ -57,6 +57,7 @@ const getDashboard = async (req, res) => {
     // ── Batch attendance trend bars ────────────────────────────────────────
     const COLORS = ['#6366F1', '#0D9488', '#7C3AED', '#C2410C', '#1D4ED8', '#15803D'];
     const batchAttendance = batchList.map((b, i) => ({
+       batchId: b._id,
       name:  b.name || b.batchCode || `Batch ${String.fromCharCode(65 + i)}`,
       pct:   b.attendanceRate || 0,
       color: COLORS[i % COLORS.length],
