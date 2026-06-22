@@ -6,9 +6,15 @@ const Attendance = require('../models/Attendance');
 const Batch      = require('../models/Batch');
 const User       = require('../models/User');
 const { protect, authorize } = require('../middleware/auth');
+const sessionCtrl = require('../controllers/sessionController');
 
 const router = express.Router();
 router.use(protect, authorize('trainer'));
+
+// ─── LIVE: POST /api/trainer/sessions/:id/start  (Go Live → publish token) ─────
+// Returns { token, url, roomName, role:'trainer', session }. The frontend hands
+// token+url straight to <LiveRoom canPublish />.
+router.post('/sessions/:id/start', sessionCtrl.goLive);
 
 // ─── GET /api/trainer/dashboard ───────────────────────────────────────────────
 router.get('/dashboard', async (req, res) => {
@@ -111,21 +117,9 @@ router.put('/sessions/:id', async (req, res) => {
 });
 
 // ─── PUT /api/trainer/sessions/:id/end ────────────────────────────────────────
-// Marks a live session as completed
-router.put('/sessions/:id/end', async (req, res) => {
-  try {
-    const session = await Session.findOneAndUpdate(
-      { _id: req.params.id, trainerId: req.user._id },
-      { status: 'completed', endedAt: new Date() },
-      { new: true }
-    ).populate('batchId', 'name');
-
-    if (!session) return res.status(404).json({ success: false, message: 'Session not found' });
-    return res.json({ success: true, session });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
-});
+// Marks the live session completed AND stops LiveKit egress (recording).
+// Delegated to the controller so recording teardown + socket notify happen.
+router.put('/sessions/:id/end', sessionCtrl.endSession);
 
 // ─── DELETE /api/trainer/sessions/:id ─────────────────────────────────────────
 router.delete('/sessions/:id', async (req, res) => {

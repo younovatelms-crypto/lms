@@ -8,6 +8,7 @@ import TraineeLiveSession from '../../features/session/TraineeLiveSession';
 import {
   fetchSessions,
   joinSession,
+  leaveSession,
   clearConnection,
   selectSessions,
   selectSessionsStatus,
@@ -19,27 +20,25 @@ import {
 const TraineeSessions = () => {
   const dispatch = useDispatch();
 
-  const sessions   = useSelector(selectSessions);          // already an array (selector guarantees it)
+  const sessions   = useSelector(selectSessions);
   const status     = useSelector(selectSessionsStatus);
   const error      = useSelector(selectSessionsError);
   const joinStatus = useSelector(selectJoinStatus);
   const joinError  = useSelector(selectJoinError);
 
-  // active = the session we're currently inside (+ its LiveKit connection); null = list view
-  const [active, setActive] = useState(null);
+  const [active, setActive] = useState(null);   // { session, connection }
   const [joiningId, setJoiningId] = useState(null);
 
   useEffect(() => {
     dispatch(fetchSessions());
   }, [dispatch]);
 
-  // Click "Join" → get a LiveKit token via the slice, then enter the room.
   const handleJoin = async (session) => {
     setJoiningId(session._id);
     try {
       const connection = await dispatch(
         joinSession({ id: session._id, passcode: session.passcode })
-      ).unwrap();                                   // { id, token, url, roomName, role }
+      ).unwrap();                                   // { id, token, url, roomName, role, canPublish, joinedAt }
       setActive({ session, connection });
     } catch (_) {
       // joinError is rendered below
@@ -48,17 +47,27 @@ const TraineeSessions = () => {
     }
   };
 
+  // Leaving finalises attendance (leftAt + present/late/partial/absent) on the
+  // backend, then clears the local connection.
   const handleLeave = () => {
+    const conn = active?.connection;
+    const id   = conn?.id || active?.session?._id;
+    if (id) {
+      const attendedSeconds = conn?.joinedAt
+        ? Math.max(0, Math.round((Date.now() - conn.joinedAt) / 1000))
+        : undefined;
+      dispatch(leaveSession({ id, attendedSeconds }));   // best-effort; reducer clears connection
+    }
     dispatch(clearConnection());
     setActive(null);
   };
 
-  // ── Live room view: hand off entirely to TraineeLiveSession ──
+  // ── Live room view ──
   if (active) {
     return (
       <TraineeLiveSession
         session={active.session}
-        connection={active.connection}   // connects with connection.token + connection.url
+        connection={active.connection}
         onLeave={handleLeave}
       />
     );
@@ -141,7 +150,6 @@ const TraineeSessions = () => {
   );
 };
 
-// ── Small presentational helper ──
 function StatusBadge({ status }) {
   const map = {
     live:      'bg-green-100 text-green-700',
@@ -157,7 +165,6 @@ function StatusBadge({ status }) {
   );
 }
 
-// ── Date/time formatting off the single scheduledAt field ──
 function formatDate(scheduledAt) {
   if (!scheduledAt) return 'TBD';
   return new Date(scheduledAt).toLocaleDateString();

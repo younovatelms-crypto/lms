@@ -1023,22 +1023,29 @@ const fmtDateShort = (raw) => {
   return isNaN(d) ? '—' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
-const RowActions = ({ s, onView, onEdit, onDelete, deleting }) => (
-  <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-    <button onClick={() => onView(s)} className="ts-btn" title="View"
-      style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid #c7d2fe', background: '#eef2ff', color: '#4338ca', fontSize: '0.74rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-      👁 View
-    </button>
-    <button onClick={() => onEdit(s)} className="ts-btn" title="Edit"
-      style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid #d1d5db', background: '#fff', color: '#374151', fontSize: '0.74rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-      ✏️ Edit
-    </button>
-    <button onClick={() => onDelete(s)} disabled={deleting} className="ts-btn" title="Delete"
-      style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid #fecaca', background: '#fff', color: '#dc2626', fontSize: '0.74rem', fontWeight: 600, cursor: deleting ? 'not-allowed' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-      {deleting ? '…' : '🗑 Delete'}
-    </button>
-  </div>
-);
+const RowActions = ({ s, onView, onEdit, onDelete, deleting }) => {
+  // A completed session is locked: View stays, but Edit + Delete are disabled.
+  const locked = (s.status || '').toLowerCase() === 'completed';
+
+  return (
+    <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+      <button onClick={() => onView(s)} className="ts-btn" title="View"
+        style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid #c7d2fe', background: '#eef2ff', color: '#4338ca', fontSize: '0.74rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+        👁 View
+      </button>
+      <button onClick={() => !locked && onEdit(s)} disabled={locked} className="ts-btn"
+        title={locked ? 'Completed sessions can’t be edited' : 'Edit'}
+        style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid #e5e7eb', background: locked ? '#f8fafc' : '#fff', color: locked ? '#cbd5e1' : '#374151', fontSize: '0.74rem', fontWeight: 600, cursor: locked ? 'not-allowed' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', opacity: locked ? 0.7 : 1 }}>
+        ✏️ Edit
+      </button>
+      <button onClick={() => !locked && onDelete(s)} disabled={deleting || locked} className="ts-btn"
+        title={locked ? 'Completed sessions can’t be deleted' : 'Delete'}
+        style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid ' + (locked ? '#e5e7eb' : '#fecaca'), background: locked ? '#f8fafc' : '#fff', color: (deleting || locked) ? '#cbd5e1' : '#dc2626', fontSize: '0.74rem', fontWeight: 600, cursor: (deleting || locked) ? 'not-allowed' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', opacity: locked ? 0.7 : 1 }}>
+        {deleting ? '…' : '🗑 Delete'}
+      </button>
+    </div>
+  );
+};
 
 const SessionTable = ({ sessions, onView, onEdit, onCreate, onDelete, deletingId }) => {
   const [query, setQuery]     = useState('');

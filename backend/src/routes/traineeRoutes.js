@@ -6,7 +6,12 @@ const Attendance = require('../models/Attendance');
 const Assignment = require('../models/Assignment');
 const { protect, authorize } = require('../middleware/auth');
 
-const { generateLiveKitToken, LIVEKIT_URL } = require('../services/livekitService');
+const {
+  generateLiveKitToken,
+  roomNameFor,            // ← canonical room name shared with the trainer
+  LIVEKIT_URL,
+} = require('../services/livekitService');
+const { classifyAttendance } = require('../utils/attendanceUtils');
 
 const router = express.Router();
 router.use(protect, authorize('trainee'));
@@ -17,7 +22,15 @@ const traineeSessionFilter = (user) => ({
     { trainees: user._id },
   ],
 });
- 
+
+// Shared membership gate used by join + leave.
+function ensureEnrolled(session, user) {
+  const batchIds   = (user.batchIds || []).map(String);
+  const inBatch    = session.batchId && batchIds.includes(String(session.batchId));
+  const isEnrolled = (session.trainees || []).some((t) => String(t) === String(user._id));
+  return inBatch || isEnrolled;
+}
+
 // GET /api/trainee/dashboard
 router.get('/dashboard', async (req, res) => {
   try {
@@ -30,7 +43,7 @@ router.get('/dashboard', async (req, res) => {
     const total   = await Attendance.countDocuments({ trainee: req.user._id });
     const present = await Attendance.countDocuments({ trainee: req.user._id, status: { $in: ['present', 'late'] } });
     const pct     = total ? ((present / total) * 100).toFixed(1) : '0.0';
- 
+
     return res.json({
       success: true,
       upcomingSessions,
@@ -41,7 +54,7 @@ router.get('/dashboard', async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 });
- 
+
 // GET /api/trainee/sessions?status=
 router.get('/sessions', async (req, res) => {
   try {
@@ -56,10 +69,11 @@ router.get('/sessions', async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 });
- 
+
 // POST /api/trainee/sessions/:id/join
-// Returns a LiveKit SUBSCRIBE-only token. Validates: session exists, is live,
-// and the trainee is actually enrolled / in the batch.
+// Returns a LiveKit token AND records the trainee's join time in the attendance
+// module. The room name is the SAME canonical string the trainer used when going
+// live, so the trainee actually lands in the trainer's room (video/audio/chat work).
 router.post('/sessions/:id/join', async (req, res) => {
   try {
     const session = await Session.findById(req.params.id);
@@ -67,29 +81,113 @@ router.post('/sessions/:id/join', async (req, res) => {
     if (session.status !== 'live') {
       return res.status(409).json({ success: false, message: 'Session is not live yet' });
     }
- 
-    const batchIds   = (req.user.batchIds || []).map(String);
-    const inBatch    = session.batchId && batchIds.includes(String(session.batchId));
-    const isEnrolled = (session.trainees || []).some((t) => String(t) === String(req.user._id));
-    if (!inBatch && !isEnrolled) {
+    if (!ensureEnrolled(session, req.user)) {
       return res.status(403).json({ success: false, message: 'You are not enrolled in this session' });
     }
- 
-    // Optional passcode gate
     if (session.passcode && req.body?.passcode !== session.passcode) {
       return res.status(403).json({ success: false, message: 'Invalid passcode' });
     }
- 
-  
-    // to allow the trainee to publish too:
-      const token = await generateLiveKitToken(req.user, session.roomName, 'publisher');
 
-    return res.json({ success: true, token, url: LIVEKIT_URL, roomName: session.roomName, role: 'student' });
+    // ── Canonical room (MATCHES the trainer's go-live room) ──────────────────
+    // goLive saved session.roomName = roomNameFor(session._id) = "session_<id>".
+    // Fall back to roomNameFor in case roomName was not persisted.
+    const roomName = session.roomName || roomNameFor(session._id);
+
+    // Trainee may publish camera/mic/screen + chat, but is NOT a room admin and
+    // cannot trigger recording.
+    const token = await generateLiveKitToken(req.user, roomName, {
+      canPublish: true,
+      roomAdmin:  false,
+      roomRecord: false,
+    });
+
+    // ── Attendance: capture join time (best-effort; never blocks joining) ────
+    try {
+      const now = new Date();
+      let att = await Attendance.findOne({ session: session._id, trainee: req.user._id });
+      if (!att) {
+        att = new Attendance({
+          session: session._id,
+          trainee: req.user._id,
+          batch:   session.batchId,
+        });
+      }
+      if (!att.joinedAt) att.joinedAt = now;        // keep the EARLIEST join time
+      const { status } = classifyAttendance({ session, joinedAt: att.joinedAt, leftAt: null });
+      att.status   = status;                        // 'present' or 'late' on entry
+      att.source   = 'self';
+      att.markedAt = now;
+      if (session.batchId && !att.batch) att.batch = session.batchId;
+      await att.save();
+    } catch (attErr) {
+      console.warn('⚠️  Attendance join-capture failed (joining anyway):', attErr.message);
+    }
+
+    return res.json({
+      success: true,
+      token,
+      url: LIVEKIT_URL,
+      roomName,
+      role: 'student',
+      canPublish: true,
+    });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
 });
- 
+
+// POST /api/trainee/sessions/:id/attendance/leave
+// Finalises attendance when the trainee leaves the room: stamps leftAt, computes
+// how long they actually attended, and sets the final status
+// (present | late | partial | absent) from the session timing.
+// Best-effort by design — the frontend calls this on leave/disconnect.
+router.post('/sessions/:id/attendance/leave', async (req, res) => {
+  try {
+    const session = await Session.findById(req.params.id).select('scheduledAt durationMinutes batchId trainees');
+    if (!session) return res.status(404).json({ success: false, message: 'Session not found' });
+    if (!ensureEnrolled(session, req.user)) {
+      return res.status(403).json({ success: false, message: 'You are not enrolled in this session' });
+    }
+
+    const now = new Date();
+    let att = await Attendance.findOne({ session: session._id, trainee: req.user._id });
+    if (!att) {
+      // Edge case: leave arrived without a prior join record — create one.
+      att = new Attendance({
+        session: session._id,
+        trainee: req.user._id,
+        batch:   session.batchId,
+        joinedAt: now,
+      });
+    }
+    att.leftAt = now;
+
+    const { status, attendedSeconds } = classifyAttendance({
+      session,
+      joinedAt: att.joinedAt || now,
+      leftAt:   now,
+    });
+    att.status          = status;
+    att.attendedSeconds = attendedSeconds;
+    att.source          = 'self';
+    att.markedAt        = now;
+    if (session.batchId && !att.batch) att.batch = session.batchId;
+    await att.save();
+
+    return res.json({
+      success: true,
+      record: {
+        status:          att.status,
+        joinedAt:        att.joinedAt,
+        leftAt:          att.leftAt,
+        attendedSeconds: att.attendedSeconds,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // GET /api/trainee/assignments
 router.get('/assignments', async (req, res) => {
   try {
@@ -106,7 +204,7 @@ router.get('/assignments', async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 });
- 
+
 // POST /api/trainee/assignments/:id/submit
 router.post('/assignments/:id/submit', async (req, res) => {
   try {
@@ -116,7 +214,7 @@ router.post('/assignments/:id/submit', async (req, res) => {
       _id: req.params.id, batchId: { $in: req.user.batchIds || [] }, status: 'active',
     });
     if (!assignment) return res.status(404).json({ success: false, message: 'Assignment not found or closed' });
- 
+
     assignment.submissions = assignment.submissions.filter((s) => s.trainee.toString() !== req.user._id.toString());
     assignment.submissions.push({ trainee: req.user._id, submissionUrl, notes: notes || '', submittedAt: new Date(), status: 'submitted' });
     await assignment.save();
@@ -125,12 +223,12 @@ router.post('/assignments/:id/submit', async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 });
- 
+
 // GET /api/trainee/attendance
 router.get('/attendance', async (req, res) => {
   try {
     const records = await Attendance.find({ trainee: req.user._id })
-      .populate('session', 'title scheduledAt').sort({ createdAt: -1 });
+      .populate('session', 'title scheduledAt durationMinutes').sort({ createdAt: -1 });
     const total   = records.length;
     const present = records.filter((r) => ['present', 'late'].includes(r.status)).length;
     return res.json({ success: true, records, stats: { total, present, percentage: total ? ((present / total) * 100).toFixed(1) : '0.0' } });
@@ -138,7 +236,7 @@ router.get('/attendance', async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 });
- 
+
 // GET /api/trainee/profile
 router.get('/profile', (req, res) => res.json({ success: true, user: req.user.toPublic() }));
 
