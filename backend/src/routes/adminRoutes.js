@@ -81,7 +81,7 @@ router.get('/dashboard', async (req, res) => {
     data: {
       totalTrainees, totalTrainers, totalBatches, activeBatches,
       totalSessions, activeRegistrations, placementReady, offerLetters,
-      batchAttendance: batchList.map((b, i) => ({ name: b.name, color: COLORS[i % 6] })),
+      batchAttendance: batchList.map((b, i) => ({ batchId: b._id,name: b.name, color: COLORS[i % 6] })),
       recentActivity: recentUsers.map(u => ({
         user: u.name, action: 'Joined platform', status: u.placementStatus,
         date: u.createdAt,
