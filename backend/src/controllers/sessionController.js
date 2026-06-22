@@ -158,8 +158,9 @@ const joinSession = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Invalid passcode' });
     }
 
-    // Room MUST equal the bare session id to match the trainer Dashboard room.
-    const roomName = String(session._id);
+    // Canonical room — IDENTICAL to the trainer's go-live room (roomNameFor),
+    // so the trainee actually joins the trainer's room.
+    const roomName = roomNameFor(session._id);
     const token    = await generateLiveKitToken(req.user, roomName, { canPublish: false });
 
     return res.json({ success: true, token, url: LIVEKIT_URL, roomName, role: 'student' });
@@ -202,15 +203,22 @@ const getToken = async (req, res) => {
   try {
     const body = req.body || {};
 
-    // room is the bare session id. Accept either `room` or `sessionId`.
-    let room = body.room || (body.sessionId ? roomNameFor(body.sessionId) : '');
-    if (!room) {
+    // Accept ANY shape the various callers send: { room }, { sessionId }, a bare
+    // session id, or a room that already carries a "session_" / "session-" prefix.
+    // Whatever arrives, resolve it down to the bare session id and then rebuild
+    // the ONE canonical room name with roomNameFor(). This is the fix that makes
+    // the trainer (who sends room=<id>) and the trainees (who join "session_<id>")
+    // land in the EXACT same LiveKit room — without it they were in different rooms
+    // and could not see/hear/chat each other.
+    const rawRoom = String(body.room || body.sessionId || '');
+    if (!rawRoom) {
       return res.status(400).json({
         success: false,
         message: 'room (or sessionId) is required',
       });
     }
-    room = String(room);
+    const sessionId = rawRoom.replace(/^session[_-]/, '');   // strip any prefix → bare id
+    let room = roomNameFor(sessionId);                        // canonical "session_<id>"
 
     const apiKey    = process.env.LIVEKIT_API_KEY;
     const apiSecret = process.env.LIVEKIT_API_SECRET;
@@ -220,10 +228,9 @@ const getToken = async (req, res) => {
       return res.status(500).json({ success: false, message: 'LiveKit is not configured on the server.' });
     }
 
-    // Try to load the session (room === session._id) to set role securely.
-    const sessionId = body.sessionId || room;
+    // Load the session (by the bare id parsed above) to set the role securely.
     let session = null;
-    try { session = await Session.findById(sessionId); } catch (_) { /* room may not be an id */ }
+    try { session = await Session.findById(sessionId); } catch (_) { /* not a valid id */ }
 
     const user = req.user || null;   // present only if the route is behind `protect`
     let canPublish;

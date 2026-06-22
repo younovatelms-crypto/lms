@@ -4,16 +4,17 @@ import { persistStore, persistReducer } from 'redux-persist';
 import storage from 'redux-persist/lib/storage';
 import { combineReducers } from 'redux';
 
-import authReducer        from '../features/auth/authSlice';
-import adminReducer       from '../features/admin/adminSlice';
-import hrReducer          from '../features/hr/hrSlice';
-import traineeReducer     from '../features/trainee/traineeSlice';
-import trainerReducer     from '../features/Trainer/trainerSlice';
-import assignmentsReducer from '../features/assignment/assignmentsSlice';
-import batchReducer       from '../features/session/batchSlice';
-import courseReducer      from '../features/admin/courseSlice';
+import authReducer          from '../features/auth/authSlice';
+import adminReducer         from '../features/admin/adminSlice';
+import adminSessionsReducer from '../features/admin/adminSessionsSlice';   // admin-side (new)
+import hrReducer            from '../features/hr/hrSlice';
+import traineeReducer       from '../features/trainee/traineeSlice';
+import trainerReducer       from '../features/Trainer/trainerSlice';
+import assignmentsReducer   from '../features/assignment/assignmentsSlice';
+import batchReducer         from '../features/session/batchSlice';
+import courseReducer        from '../features/admin/courseSlice';
 
-// Two DIFFERENT slices, two DIFFERENT files, two DIFFERENT keys:
+// Three DIFFERENT session slices, three DIFFERENT files, three DIFFERENT keys:
 import sessionsReducer        from '../features/session/sessionsSlice';   // trainer-side (existing)
 import traineeSessionsReducer from '../features/sessions/sessionsSlice';  // trainee-side (new)
 
@@ -32,6 +33,7 @@ const rootReducer = combineReducers({
   trainer:         trainerReducer,
   sessions:        sessionsReducer,         // ← trainer slice  -> selectors read s.sessions.*
   traineeSessions: traineeSessionsReducer,  // ← trainee slice  -> selectors read s.traineeSessions.*
+  adminSessions:   adminSessionsReducer,    // ← admin slice    -> selectors read s.adminSessions.*
   assignments:     assignmentsReducer,
   batches:         batchReducer,
   courses:         courseReducer,
