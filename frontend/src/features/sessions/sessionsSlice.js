@@ -1,27 +1,40 @@
-// src/features/sessions/sessionsSlice.js   (TRAINEE-side slice → store key "traineeSessions")
+// src/features/sessions/sessionsSlice.js   (TRAINEE-side slice -> store key "traineeSessions")
 //
 // API integration for the trainee /trainee/sessions page.
-// Only two calls are needed here: list the trainee's sessions, and join a live one.
+//   GET  /api/trainee/sessions                       -> list sessions
+//   POST /api/trainee/sessions/:id/join              -> LiveKit token + url + room (+ canPublish)
+//   POST /api/trainee/sessions/:id/attendance/leave  -> finalise attendance on leave
 //
-// FIXES vs the old version:
-//   • JWT is read from redux state.auth.token (the app persists auth via redux-persist,
-//     so localStorage.getItem('token') was usually null → 401 on every request).
-//   • Calls the trainee endpoints that actually exist & are role-correct:
-//       GET  /api/trainee/sessions
-//       POST /api/trainee/sessions/:id/join   → { token, url, roomName, role }
-//   • Dropped create/update/delete/enroll (they pointed at unmounted routes and the
-//     trainee page never used them).
+// Base URL is read from CRA's REACT_APP_API_BASE_URL (Vite's import.meta.env does
+// NOT exist here). '' falls back to the CRA dev proxy.
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
-// '' → relative URL; goes through CRA's  "proxy": "http://localhost:8080"
-const API = process.env.REACT_APP_API_BASE_URL || '';
+// ── Defensive base-URL resolver ──────────────────────────────────────────────
+function sanitizeBase(raw) {
+  if (!raw) return '';
+  let v = String(raw).split('#')[0].trim();          // kill inline comments
+  if (!/^https?:\/\//i.test(v)) return '';           // not a real URL -> use proxy
+  return v.replace(/\/+$/, '');                       // no trailing slash
+}
+const API = sanitizeBase(process.env.REACT_APP_API_BASE_URL);
 
 const authHeader = (getState) => ({
   headers: { Authorization: `Bearer ${getState().auth?.token || ''}` },
 });
 
-// GET /api/trainee/sessions  → sessions for the trainee's batch OR ones they're enrolled in
+function describeError(err, fallback) {
+  if (err.response) {
+    const msg = err.response.data?.message || err.response.statusText;
+    return `${fallback} (${err.response.status}${msg ? `: ${msg}` : ''})`;
+  }
+  if (err.request) {
+    return `${fallback}: cannot reach the API. Check the backend is running and REACT_APP_API_BASE_URL / proxy is correct.`;
+  }
+  return `${fallback}: ${err.message}`;
+}
+
+// GET /api/trainee/sessions
 export const fetchSessions = createAsyncThunk(
   'traineeSessions/fetchSessions',
   async (params = {}, { getState, rejectWithValue }) => {
@@ -30,15 +43,15 @@ export const fetchSessions = createAsyncThunk(
         ...authHeader(getState),
         params,
       });
-      // Accept { sessions: [] } | { data: [] } | bare array
-      return Array.isArray(data) ? data : data.sessions || data.data || [];
+      const list = Array.isArray(data) ? data : data?.sessions || data?.data || [];
+      return Array.isArray(list) ? list : [];
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to fetch sessions');
+      return rejectWithValue(describeError(err, 'Failed to fetch sessions'));
     }
   }
 );
 
-// POST /api/trainee/sessions/:id/join  → LiveKit connection for the room
+// POST /api/trainee/sessions/:id/join -> LiveKit connection for the room
 export const joinSession = createAsyncThunk(
   'traineeSessions/joinSession',
   async ({ id, passcode } = {}, { getState, rejectWithValue }) => {
@@ -48,11 +61,38 @@ export const joinSession = createAsyncThunk(
         { passcode },
         authHeader(getState)
       );
-      // data = { success, token, url, roomName, role:'student' }
-      return { id, token: data.token, url: data.url, roomName: data.roomName, role: data.role };
+      if (!data?.token || !data?.url) {
+        return rejectWithValue(data?.message || 'No valid join token returned.');
+      }
+      // data = { success, token, url, roomName, role:'student', canPublish:true }
+      return {
+        id,
+        token:      data.token,
+        url:        data.url,
+        roomName:   data.roomName,
+        role:       data.role || 'student',
+        canPublish: data.canPublish !== false,   // trainees may now publish cam/mic/screen
+        joinedAt:   Date.now(),                  // used to compute attendedSeconds on leave
+      };
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Could not join session');
+      return rejectWithValue(describeError(err, 'Could not join session'));
     }
+  }
+);
+
+// POST /api/trainee/sessions/:id/attendance/leave -> finalise attendance status.
+// Best-effort: a failure here must never block leaving the room.
+export const leaveSession = createAsyncThunk(
+  'traineeSessions/leaveSession',
+  async ({ id, attendedSeconds } = {}, { getState }) => {
+    try {
+      await axios.post(
+        `${API}/api/trainee/sessions/${id}/attendance/leave`,
+        attendedSeconds != null ? { attendedSeconds } : {},
+        authHeader(getState)
+      );
+    } catch (_) { /* swallow — leaving must always succeed */ }
+    return { id };
   }
 );
 
@@ -60,10 +100,10 @@ const traineeSessionsSlice = createSlice({
   name: 'traineeSessions',
   initialState: {
     items: [],
-    status: 'idle',       // idle | loading | succeeded | failed
+    status: 'idle',
     error: null,
 
-    connection: null,     // { id, token, url, roomName, role } from the last join
+    connection: null,     // { id, token, url, roomName, role, canPublish, joinedAt }
     joinStatus: 'idle',
     joinError: null,
   },
@@ -90,7 +130,7 @@ const traineeSessionsSlice = createSlice({
       })
       .addCase(fetchSessions.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload;
+        state.error = action.payload || action.error?.message || 'Failed to fetch sessions';
       })
 
       .addCase(joinSession.pending, (state) => {
@@ -103,14 +143,19 @@ const traineeSessionsSlice = createSlice({
       })
       .addCase(joinSession.rejected, (state, action) => {
         state.joinStatus = 'failed';
-        state.joinError = action.payload;
+        state.joinError = action.payload || action.error?.message || 'Could not join session';
+      })
+
+      .addCase(leaveSession.fulfilled, (state) => {
+        state.connection = null;
+        state.joinStatus = 'idle';
       });
   },
 });
 
 export const { clearConnection, clearSessionError } = traineeSessionsSlice.actions;
 
-// ── Selectors (read the dedicated traineeSessions key; optional-chained) ──────
+// ── Selectors ────────────────────────────────────────────────────────────────
 export const selectSessions       = (s) => s.traineeSessions?.items ?? [];
 export const selectSessionsStatus = (s) => s.traineeSessions?.status ?? 'idle';
 export const selectSessionsError  = (s) => s.traineeSessions?.error ?? null;

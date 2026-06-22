@@ -1,6 +1,9 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
+// react-scripts (CRA) build → use process.env.REACT_APP_*  (import.meta.env is Vite-only
+// and throws under webpack). '' falls back to the CRA dev proxy in package.json.
+//const API = process.env.REACT_APP_API_BASE_URL || '';
 const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
 // ─── Auth header — reads from state.auth.token (same as adminSlice) ───────────
@@ -94,6 +97,33 @@ export const updateSession = createAsyncThunk(
   }
 );
 
+// POST /api/trainer/sessions/:id/start  → trainer "Go Live"
+// Response: { success, token, url, roomName, role:'trainer', session }
+// We stash the LiveKit connection so <TrainerLiveControls> can drop straight
+// into <LiveRoom canPublish />, and we flip the session row to 'live'.
+export const startSession = createAsyncThunk(
+  'sessions/startSession',
+  async (id, { getState, rejectWithValue }) => {
+    try {
+      const { data } = await axios.post(
+        `${API}/api/trainer/sessions/${id}/start`,
+        {},
+        authHeader(getState)
+      );
+      return {
+        id,
+        token:    data.token,
+        url:      data.url,
+        roomName: data.roomName,
+        role:     data.role || 'trainer',
+        session:  data.session,
+      };
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || err.message || 'Failed to go live');
+    }
+  }
+);
+
 // PUT /api/trainer/sessions/:id/end
 // Response: { success: true, session: { ...session, status:'completed' } }
 export const endSession = createAsyncThunk(
@@ -179,6 +209,11 @@ const sessionsSlice = createSlice({
     endStatus:     'idle',
     endError:      null,
 
+    // Go Live (start) + active trainer LiveKit connection
+    startStatus:       'idle',   // idle | loading | succeeded | failed
+    startError:        null,
+    trainerConnection: null,     // { id, token, url, roomName, role }
+
     // Delete session
     deleteStatus:  'idle',
     deleteError:   null,
@@ -201,6 +236,11 @@ const sessionsSlice = createSlice({
     resetCreateStatus(state) {
       state.createStatus = 'idle';
       state.createError  = null;
+    },
+    clearTrainerConnection(state) {
+      state.trainerConnection = null;
+      state.startStatus       = 'idle';
+      state.startError        = null;
     },
   },
 
@@ -250,12 +290,26 @@ const sessionsSlice = createSlice({
       })
       .addCase(updateSession.rejected,  (s, a) => { s.updateStatus = 'failed'; s.updateError = a.payload; });
 
+    // ── startSession (Go Live) ────────────────────────────────────────────────
+    builder
+      .addCase(startSession.pending,   (s)    => { s.startStatus = 'loading'; s.startError = null; })
+      .addCase(startSession.fulfilled, (s, a) => {
+        s.startStatus = 'succeeded';
+        const { id, token, url, roomName, role, session } = a.payload;
+        s.trainerConnection = { id, token, url, roomName, role };
+        // flip the row to live so the UI shows "Enter Room / End"
+        const i = s.sessions.findIndex((x) => x._id === id);
+        if (i !== -1) s.sessions[i] = session?._id ? session : { ...s.sessions[i], status: 'live' };
+      })
+      .addCase(startSession.rejected,  (s, a) => { s.startStatus = 'failed'; s.startError = a.payload; });
+
     // ── endSession ─────────────────────────────────────────────────────────────
     // Response: { success: true, session: { ...session, status:'completed' } }
     builder
       .addCase(endSession.pending,   (s)    => { s.endStatus = 'loading';   s.endError = null; })
       .addCase(endSession.fulfilled, (s, a) => {
         s.endStatus = 'succeeded';
+        s.trainerConnection = null;        // leave the room on end
         const { id, data } = a.payload;
         const updated = oneSession(data);
         const i = s.sessions.findIndex(x => x._id === (updated?._id || id));
@@ -286,7 +340,7 @@ const sessionsSlice = createSlice({
 });   // ← createSlice closes here
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
-export const { clearSessionErrors, resetCreateStatus } = sessionsSlice.actions;
+export const { clearSessionErrors, resetCreateStatus, clearTrainerConnection } = sessionsSlice.actions;
 
 // ─── Selectors ────────────────────────────────────────────────────────────────
 export const selectAllSessions    = (s) => s.sessions.sessions;
@@ -300,6 +354,9 @@ export const selectUpdateStatus   = (s) => s.sessions.updateStatus;
 export const selectUpdateError    = (s) => s.sessions.updateError;
 export const selectEndStatus      = (s) => s.sessions.endStatus;
 export const selectEndError       = (s) => s.sessions.endError;
+export const selectStartStatus        = (s) => s.sessions.startStatus;
+export const selectStartError         = (s) => s.sessions.startError;
+export const selectTrainerConnection  = (s) => s.sessions.trainerConnection;
 export const selectDeleteStatus   = (s) => s.sessions.deleteStatus;
 export const selectMarkStatus     = (s) => s.sessions.markStatus;
 export const selectMarkError      = (s) => s.sessions.markError;

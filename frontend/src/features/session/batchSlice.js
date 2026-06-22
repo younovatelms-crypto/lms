@@ -16,6 +16,7 @@ import axios from 'axios';
 
 const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
+
 // ─── Auth header — reads token from Redux state (same pattern as adminSlice) ──
 const authHeader = (getState) => ({
   headers: { Authorization: `Bearer ${getState().auth?.token}` },

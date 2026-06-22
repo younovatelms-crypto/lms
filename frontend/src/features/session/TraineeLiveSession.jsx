@@ -1,22 +1,29 @@
 // src/features/session/TraineeLiveSession.jsx
 //
-// Trainee live view. Shows a "Join Session" screen, fetches a SUBSCRIBE token from
-// the backend, then enters the shared LiveRoom (video viewer + chat).
-// Crash-proof: user/token come from the redux store, never from a possibly-undefined prop.
-import React, { useState } from 'react';
+// Trainee live view. Shows a "Join Session" screen, fetches a join token from the
+// backend (which also stamps the trainee's join time into the attendance module),
+// then enters the shared LiveRoom.
+//
+// Trainees can now turn ON their camera/mic/screen-share and chat — but they join
+// MUTED with the camera OFF (autoPublish=false), so nothing broadcasts until they
+// choose to. On leave we finalise attendance (leftAt + present/late/partial/absent).
+import React, { useState, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import axios from 'axios';
 import LiveRoom from '../../components/live/LiveRoom';
 
-const API = process.env.REACT_APP_API_BASE_URL || ''; // '' → CRA proxy to :8080
+const API = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
 
 const TraineeLiveSession = ({ session, connection: connectionProp, onLeave }) => {
   const token = useSelector((s) => s.auth?.token || '');
   const user  = useSelector((s) => s.auth?.user) || {};
 
-  const [connection, setConnection] = useState(connectionProp || null); // { token, url, role }
+  const [connection, setConnection] = useState(connectionProp || null); // { token, url, role, canPublish }
   const [status, setStatus] = useState(connectionProp ? 'joined' : 'idle'); // idle|connecting|joined|error
   const [error, setError] = useState(null);
+
+  // Remember when we entered so we can report attended seconds on leave.
+  const joinedAtRef = useRef(connectionProp ? Date.now() : null);
 
   const sessionId = session?._id || session?.id;
 
@@ -35,7 +42,13 @@ const TraineeLiveSession = ({ session, connection: connectionProp, onLeave }) =>
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (!data?.token || !data?.url) throw new Error(data?.message || 'No valid join token returned.');
-      setConnection({ token: data.token, url: data.url, role: data.role || 'student' });
+      joinedAtRef.current = Date.now();
+      setConnection({
+        token: data.token,
+        url: data.url,
+        role: data.role || 'student',
+        canPublish: data.canPublish !== false,
+      });
       setStatus('joined');
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Failed to join the session.');
@@ -43,19 +56,39 @@ const TraineeLiveSession = ({ session, connection: connectionProp, onLeave }) =>
     }
   };
 
-  const handleLeave = () => {
+  // Finalise attendance on the backend, then hand control back to the parent.
+  // Best-effort: a failure here must never trap the user inside the room.
+  const finaliseAttendance = async () => {
+    if (!sessionId) return;
+    const attendedSeconds = joinedAtRef.current
+      ? Math.max(0, Math.round((Date.now() - joinedAtRef.current) / 1000))
+      : undefined;
+    try {
+      await axios.post(
+        `${API}/api/trainee/sessions/${sessionId}/attendance/leave`,
+        attendedSeconds != null ? { attendedSeconds } : {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+    } catch (_) { /* ignore — leaving must always succeed */ }
+  };
+
+  const handleLeave = async () => {
+    await finaliseAttendance();
     setConnection(null);
     setStatus('idle');
+    joinedAtRef.current = null;
     if (typeof onLeave === 'function') onLeave();
   };
 
-  // ── In the room (viewer: no publish, but can chat) ──
+  // ── In the room ──
   if (status === 'joined' && connection?.token && connection?.url) {
+    const canPublish = connection?.canPublish ?? (connection?.role === 'trainer');
     return (
       <LiveRoom
         token={connection.token}
         serverUrl={connection.url}
-        canPublish={true}                 // trainee is a viewer
+        canPublish={canPublish}      // trainee may enable cam/mic/screen
+        autoPublish={false}          // …but joins muted with camera OFF
         title={session?.title || 'Live Session'}
         identityName={user?.name || 'Trainee'}
         onLeave={handleLeave}
@@ -72,8 +105,8 @@ const TraineeLiveSession = ({ session, connection: connectionProp, onLeave }) =>
 
       <h1 className="text-xl font-bold mb-1">{session?.title || 'Live Session'}</h1>
       <p className="text-sm text-gray-500 mb-4">
-        You'll join as a viewer. The trainer's video and audio will appear once they're live.
-        You can use the chat to ask questions.
+        You'll join the live room. Your camera and microphone start off — turn them on
+        from the control bar whenever you like. You can also share your screen and chat.
       </p>
 
       {error && (
