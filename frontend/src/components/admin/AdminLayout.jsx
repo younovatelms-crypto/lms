@@ -24,7 +24,7 @@ const NAV = [
       // Flat items
       // { to: '/admin/programs',  icon: 'book',       label: 'Programs' },
       { to: '/admin/batches',   icon: 'stack-2',    label: 'Batches'  },
-      { to: '/admin/courses',   icon: 'stack-2',    label: 'courses'  },
+      { to: '/admin/courses',   icon: 'stack-2',    label: 'Courses'  },
       // Sub-menu: Users
       {
         icon: 'users',
