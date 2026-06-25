@@ -304,20 +304,57 @@ export default function AdminSessions() {
     const rowBusy = busyId === s._id;
     const isCompleted = s.status === 'completed';
     const isCancelled = s.status === 'cancelled';
+
     const editDisabled = rowBusy || isCompleted;
     const deleteDisabled = rowBusy || isCompleted;
+
+    const btnStyle = (bg, border, text, disabled) => ({
+      padding: '6px 10px',
+      borderRadius: 6,
+      fontSize: 12,
+      fontWeight: 700,
+      cursor: disabled ? 'not-allowed' : 'pointer',
+      opacity: disabled ? 0.45 : 1,
+      fontFamily: 'inherit',
+      border: `1px solid ${border}`,
+      background: bg,
+      color: text,
+      transition: 'all 0.15s ease',
+      whiteSpace: 'nowrap',
+    });
+
     return (
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        <button onClick={() => openEdit(s)} disabled={editDisabled} style={actBtn('#2f6f9b', editDisabled)}
-                title={isCompleted ? 'Completed sessions are locked' : undefined}>Edit</button>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-start', flexWrap: 'wrap' }}>
+        {/* Edit */}
+        <button
+          onClick={() => openEdit(s)}
+          disabled={editDisabled}
+          style={btnStyle('#F8FAFC', '#E2E8F0', '#475569', editDisabled)}
+          title={isCompleted ? 'Completed sessions are locked' : 'Edit session'}
+        >
+          ✏️ {rowBusy && editDisabled ? '…' : ''}
+        </button>
+
+        {/* Cancel */}
         {!isCompleted && !isCancelled && (
-          <button onClick={() => cancelSession(s)} disabled={rowBusy} style={actBtn('#b06f00', rowBusy)}>
-            {rowBusy ? '…' : 'Cancel'}
+          <button
+            onClick={() => cancelSession(s)}
+            disabled={rowBusy}
+            style={btnStyle('#FEF3C7', '#FDE68A', '#B45309', rowBusy)}
+            title={rowBusy ? 'Please wait…' : 'Cancel session'}
+          >
+            🛑 {rowBusy ? '…' : ''}
           </button>
         )}
-        <button onClick={() => removeSession(s)} disabled={deleteDisabled} style={actBtn('#c0392b', deleteDisabled)}
-                title={isCompleted ? 'Completed sessions are locked' : undefined}>
-          {rowBusy ? '…' : 'Delete'}
+
+        {/* Delete */}
+        <button
+          onClick={() => removeSession(s)}
+          disabled={deleteDisabled}
+          style={btnStyle('#FEF2F2', '#FECACA', '#DC2626', deleteDisabled)}
+          title={isCompleted ? 'Completed sessions are locked' : 'Delete session'}
+        >
+          🗑️ {rowBusy && deleteDisabled ? '…' : ''}
         </button>
       </div>
     );
@@ -401,8 +438,8 @@ export default function AdminSessions() {
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
               <thead>
                 <tr style={{ background: '#f8fafc', color: '#657691' }}>
-                  {['Title', 'Batch', 'Trainer', 'Trainees', 'Scheduled', 'Status', 'Actions'].map((h) => (
-                    <th key={h} style={th}>{h}</th>
+                  {['#', 'Title', 'Batch', 'Trainer', 'Trainees', 'Scheduled', 'Status', 'Actions'].map((h) => (
+                    <th key={h} style={h === '#' ? { ...th, width: 52 } : th}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -414,6 +451,9 @@ export default function AdminSessions() {
                 ) : (
                   pageItems.map((s, i) => (
                     <tr key={s._id} style={{ background: i % 2 ? '#f8fafc' : '#fff', borderBottom: '1px solid #dbe3ed' }}>
+                      <td style={{ ...td, color: '#64748B', fontWeight: 700, width: 52, whiteSpace: 'nowrap' }}>
+                        {total === 0 ? '—' : startIdx + i}
+                      </td>
                       <td style={td}>
                         <span style={{ fontWeight: 600, color: '#172033' }}>{s.title || 'Untitled'}</span>
                         {s.recordingUrl && (
@@ -642,9 +682,17 @@ const btnSchedule = (mobile) => ({
 });
 
 const actBtn = (color, disabled = false) => ({
-  background: 'transparent', color, border: `1px solid ${color}33`,
-  padding: '5px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-  cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.45 : 1, fontFamily: 'inherit',
+  padding: '6px 10px',
+  borderRadius: 6,
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: disabled ? 'not-allowed' : 'pointer',
+  opacity: disabled ? 0.45 : 1,
+  fontFamily: 'inherit',
+  border: `1px solid ${color}33`,
+  background: '#fff',
+  color,
+  transition: 'all 0.15s ease',
 });
 
 const input = { width: '100%', boxSizing: 'border-box', padding: '9px 11px', borderRadius: 8, border: '1px solid #dbe3ed', fontSize: 13, fontFamily: 'inherit', color: '#172033', background: '#fff' };
