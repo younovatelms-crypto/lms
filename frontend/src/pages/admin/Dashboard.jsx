@@ -55,7 +55,7 @@ const Dashboard = () => {
       <div style={{ 
         padding: '32px 36px', 
         fontFamily: 'Inter, system-ui, sans-serif',
-        background: '#F8FAFC',
+        background: '#F1F5F9',
         minHeight: '100vh'
       }}>
         <div style={{ height: 28, width: 220, marginBottom: 8, background: 'linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%)', borderRadius: 8 }} />
@@ -72,7 +72,7 @@ const Dashboard = () => {
       <div style={{ 
         padding: '32px 36px', 
         fontFamily: 'Inter, system-ui, sans-serif',
-        background: '#F8FAFC',
+        background: '#F1F5F9',
         minHeight: '100vh'
       }}>
         <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12, padding: 20 }}>
@@ -102,28 +102,113 @@ const Dashboard = () => {
     <div style={{ 
       padding: window.innerWidth <= 768 ? '12px 16px' : window.innerWidth <= 1024 ? '14px 24px' : '16px 36px', 
       fontFamily: 'Inter, system-ui, sans-serif',
-      background: '#F8FAFC',
+      background: '#F1F5F9',
       minHeight: '100vh'
     }}>
-      {/* Page Header */}
-      <div style={{ marginBottom: window.innerWidth <= 768 ? 12 : 16 }}>
-        <h1 style={{ 
-          fontSize: window.innerWidth <= 768 ? 22 : window.innerWidth <= 1024 ? 25 : 28, 
-          fontWeight: 800, 
-          color: '#0F172A', 
-          margin: '0 0 4px',
-          letterSpacing: '-0.5px'
-        }}>
-          Platform Overview
-        </h1>
-        <p style={{ 
-          fontSize: window.innerWidth <= 768 ? 12 : 14, 
-          color: '#64748B', 
-          margin: 0,
-          fontWeight: 500
-        }}>
-          Real-time KPIs across all programs and batches • {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-        </p>
+
+      {/* ── HERO BANNER ── */}
+      <div style={{
+        background: 'linear-gradient(135deg, #1E3A5F 0%, #1a2f52 55%, #231a4a 100%)',
+        borderRadius: window.innerWidth <= 768 ? 16 : 20,
+        padding: window.innerWidth <= 768 ? '20px 20px 22px' : window.innerWidth <= 1024 ? '24px 28px' : '28px 32px',
+        marginBottom: window.innerWidth <= 768 ? 14 : 18,
+        border: '1px solid rgba(255,255,255,0.06)',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+        <div style={{
+          position: 'absolute', top: -80, right: -80,
+          width: 260, height: 260,
+          background: 'rgba(99,102,241,0.1)',
+          borderRadius: '50%',
+          pointerEvents: 'none',
+        }} />
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <p style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: '2px',
+            color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase',
+            margin: '0 0 10px',
+          }}>
+            Platform Overview · {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+          </p>
+          <h1 style={{
+            fontSize: window.innerWidth <= 768 ? 20 : window.innerWidth <= 1024 ? 23 : 26,
+            fontWeight: 800, color: '#F8FAFC',
+            margin: '0 0 8px', lineHeight: 1.2, letterSpacing: '-0.3px',
+          }}>
+            YouVA OS is{' '}
+            <span style={{ color: '#FB923C' }}>
+              {attendanceRate >= 80 ? 'healthy' : attendanceRate >= 60 ? 'moderate' : 'at risk'}
+            </span>
+            {' '}— all systems operational.
+          </h1>
+          <p style={{
+            fontSize: window.innerWidth <= 768 ? 12 : 13,
+            color: 'rgba(255,255,255,0.5)',
+            margin: '0 0 22px', lineHeight: 1.6, maxWidth: 460,
+          }}>
+            {totalTrainees} active trainees across {activeBatches || totalBatches} batches.
+            {pendingApprovals > 0 ? ` ${pendingApprovals} items waiting on your approval.` : ' All approvals are up to date.'}
+          </p>
+
+          <div style={{
+            display: 'flex',
+            alignItems: 'flex-end',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 16,
+          }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 0 }}>
+              {[
+                { label: 'Total Trainees',  value: totalTrainees.toLocaleString(), delta: `▲ ${Math.floor(totalTrainees * 0.04)} this month`, deltaColor: '#34D399' },
+                { label: 'Active Batches',  value: activeBatches || totalBatches,  delta: `Total: ${totalBatches}`,                          deltaColor: '#60A5FA' },
+                { label: 'Attendance Rate', value: `${attendanceRate}%`,            delta: '▲ 6.1%',                                         deltaColor: '#34D399' },
+                { label: 'Placement Ready', value: placementReady,                  delta: '+12%',                                           deltaColor: '#FB923C' },
+              ].map((m, i) => (
+                <div key={i} style={{
+                  display: window.innerWidth <= 480 && i > 1 ? 'none' : 'flex',
+                  flexDirection: 'column', gap: 3,
+                  paddingRight: i < 3 ? (window.innerWidth <= 768 ? 18 : 28) : 0,
+                  paddingLeft: i > 0 ? (window.innerWidth <= 768 ? 18 : 28) : 0,
+                  borderLeft: i > 0 ? '1px solid rgba(255,255,255,0.1)' : 'none',
+                }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#60A5FA', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                    {m.label}
+                  </span>
+                  <span style={{ fontSize: window.innerWidth <= 768 ? 20 : 26, fontWeight: 800, color: '#F8FAFC', lineHeight: 1 }}>
+                    {m.value}
+                  </span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: m.deltaColor }}>
+                    {m.delta}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {window.innerWidth > 768 && (
+              <div style={{
+                background: 'rgba(255,255,255,0.07)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 14,
+                padding: '14px 18px',
+                minWidth: 150,
+              }}>
+                <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 8px' }}>
+                  Enrollments · 6 mo
+                </p>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 38 }}>
+                  {[40, 52, 48, 66, 78, 92].map((h, i) => (
+                    <div key={i} style={{
+                      flex: 1, height: `${h}%`, borderRadius: '3px 3px 0 0',
+                      background: i === 5 ? '#60A5FA' : 'rgba(255,255,255,0.15)',
+                    }} />
+                  ))}
+                </div>
+                <p style={{ fontSize: 15, fontWeight: 800, color: '#34D399', textAlign: 'right', margin: '6px 0 0' }}>+18%</p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* KPI Cards Grid - Responsive */}
@@ -142,6 +227,7 @@ const Dashboard = () => {
           subtitle={totalTrainees > 0 ? `↑ ${Math.floor(totalTrainees * 0.04)} this month` : 'No data'}
           icon="👥"
           color="#3B82F6"
+          accentBg="#EFF6FF"
         />
         <KPICard
           title="ACTIVE BATCHES"
@@ -149,6 +235,7 @@ const Dashboard = () => {
           subtitle={`Total: ${totalBatches}`}
           icon="🏠"
           color="#22C55E"
+          accentBg="#F0FDF4"
         />
         {/* <KPICard
           title="PIPELINE ELIGIBLE"
@@ -156,6 +243,7 @@ const Dashboard = () => {
           subtitle="Score ≥ 60"
           icon="📈"
           color="#22C55E"
+          accentBg="#F0FDF4"
         /> */}
         {/* <KPICard
           title="PLACEMENT READY"
@@ -163,6 +251,7 @@ const Dashboard = () => {
           subtitle="Score ≥ 80"
           icon="✅"
           color="#22C55E"
+          accentBg="#F0FDF4"
         /> */}
         <KPICard
           title="ATTENDANCE RISK"
@@ -170,6 +259,7 @@ const Dashboard = () => {
           subtitle="Below 80%"
           icon="⚠️"
           color="#F59E0B"
+          accentBg="#FFFBEB"
         />
         {/* <KPICard
           title="RESIDENCY ACTIVE"
@@ -177,6 +267,7 @@ const Dashboard = () => {
           subtitle="YBLP Month 6"
           icon="🏢"
           color="#06B6D4"
+          accentBg="#ECFEFF"
         /> */}
         <KPICard
           title="BRANCH READY"
@@ -184,6 +275,7 @@ const Dashboard = () => {
           subtitle="YBLP verdict"
           icon="🎯"
           color="#06B6D4"
+          accentBg="#ECFEFF"
         />
       </div>
 
@@ -199,15 +291,19 @@ const Dashboard = () => {
           background: '#ffffff',
           border: '1px solid #E2E8F0',
           borderRadius: 16,
-          boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 8px 24px rgba(30,58,95,0.08)',
+          boxShadow: '0 1px 3px rgba(15,23,42,0.05), 0 4px 16px rgba(30,58,95,0.06)',
           overflow: 'hidden'
         }}>
           <div style={{ padding: '20px 24px 16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: 0 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', margin: 0 }}>
                 {batchTrends.length > 0 ? 'Batch Attendance Trends' : 'Platform Activity'}
               </h3>
-              <span style={{ fontSize: 12, color: '#64748B', fontWeight: 500 }}>Weekly trends</span>
+              <span style={{
+                fontSize: 11, color: '#94A3B8',
+                background: '#F8FAFC', border: '1px solid #E2E8F0',
+                borderRadius: 20, padding: '3px 10px', fontWeight: 600,
+              }}>Weekly trends</span>
             </div>
           </div>
           
@@ -228,7 +324,7 @@ const Dashboard = () => {
               <div style={{ 
                 padding: 40, 
                 textAlign: 'center', 
-                color: '#64748B', 
+                color: '#94A3B8', 
                 fontSize: 13 
               }}>
                 <p style={{ margin: 0 }}>No batch attendance data available.</p>
@@ -245,7 +341,7 @@ const Dashboard = () => {
           background: '#ffffff',
           border: '1px solid #E2E8F0',
           borderRadius: 16,
-          boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 8px 24px rgba(30,58,95,0.08)',
+          boxShadow: '0 1px 3px rgba(15,23,42,0.05), 0 4px 16px rgba(30,58,95,0.06)',
           height: window.innerWidth <= 1024 ? '250px' : '300px',
           display: 'flex',
           flexDirection: 'column',
@@ -258,8 +354,12 @@ const Dashboard = () => {
             flexShrink: 0
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: 0 }}>Activity Feed</h3>
-              <span style={{ fontSize: 12, color: '#64748B', fontWeight: 500 }}>Last 24 hours</span>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', margin: 0 }}>Activity Feed</h3>
+              <span style={{
+                fontSize: 11, color: '#94A3B8',
+                background: '#F8FAFC', border: '1px solid #E2E8F0',
+                borderRadius: 20, padding: '3px 10px', fontWeight: 600,
+              }}>Last 24 hours</span>
             </div>
           </div>
 
@@ -280,7 +380,7 @@ const Dashboard = () => {
               <div style={{ 
                 padding: '40px 24px', 
                 textAlign: 'center', 
-                color: '#64748B', 
+                color: '#94A3B8', 
                 fontSize: 13 
               }}>
                 <p style={{ margin: 0 }}>No recent activity.</p>
@@ -327,7 +427,7 @@ const ProgressRow = ({ label, pct, color, onClick }) => (
       alignItems: 'center', 
       gap: 12,
       cursor: onClick ? 'pointer' : 'default',
-      padding: '4px 6px',
+      padding: '5px 6px',
       borderRadius: 8,
       transition: 'background 0.15s ease'
     }}
@@ -336,10 +436,10 @@ const ProgressRow = ({ label, pct, color, onClick }) => (
   >
     <span style={{ 
       fontSize: window.innerWidth <= 768 ? 12 : 13, 
-      color: '#0F172A', 
+      color: '#334155', 
       width: window.innerWidth <= 768 ? 120 : 200, 
       flexShrink: 0,
-      fontWeight: 500,
+      fontWeight: 600,
       overflow: 'hidden',
       textOverflow: 'ellipsis',
       whiteSpace: 'nowrap'
@@ -348,7 +448,7 @@ const ProgressRow = ({ label, pct, color, onClick }) => (
     </span>
     <div style={{ 
       flex: 1, 
-      height: 8, 
+      height: 7, 
       background: '#F1F5F9',
       borderRadius: 4, 
       overflow: 'hidden' 
@@ -363,8 +463,8 @@ const ProgressRow = ({ label, pct, color, onClick }) => (
     </div>
     <span style={{ 
       fontSize: window.innerWidth <= 768 ? 11 : 12, 
-      fontWeight: 600, 
-      color, 
+      fontWeight: 700, 
+      color: color === '#22C55E' ? '#16A34A' : color === '#F59E0B' ? '#D97706' : '#DC2626',
       width: window.innerWidth <= 768 ? 30 : 40, 
       textAlign: 'right' 
     }}>
@@ -374,31 +474,40 @@ const ProgressRow = ({ label, pct, color, onClick }) => (
 );
 
 // KPI Card Component - Responsive
-const KPICard = ({ title, value, subtitle, icon, color }) => (
+const KPICard = ({ title, value, subtitle, icon, color, accentBg }) => (
   <div style={{
     background: '#ffffff',
     border: '1px solid #E2E8F0',
     borderRadius: 16,
-    padding: window.innerWidth <= 768 ? 12 : 14,
-    boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 8px 24px rgba(30,58,95,0.08)',
+    padding: window.innerWidth <= 768 ? 14 : 18,
+    boxShadow: '0 1px 3px rgba(15,23,42,0.05), 0 4px 16px rgba(30,58,95,0.06)',
     transition: 'box-shadow 0.2s ease, transform 0.2s ease',
     cursor: 'default'
   }}>
-    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: window.innerWidth <= 768 ? 8 : 12 }}>
+    <div style={{
+      width: 38, height: 38,
+      borderRadius: 10,
+      background: accentBg || '#F8FAFC',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: 17,
+      marginBottom: 14,
+    }}>
+      {icon}
+    </div>
+    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: window.innerWidth <= 768 ? 8 : 10 }}>
       <div style={{ 
         fontSize: window.innerWidth <= 768 ? 10 : 11, 
-        fontWeight: 600, 
-        color: '#64748B', 
-        letterSpacing: '0.5px', 
+        fontWeight: 700, 
+        color: '#94A3B8', 
+        letterSpacing: '0.8px', 
         textTransform: 'uppercase',
         lineHeight: 1.2
       }}>
         {title}
       </div>
-      <div style={{ fontSize: 18, opacity: 0.8, display: window.innerWidth <= 768 ? 'none' : 'block' }}>{icon}</div>
     </div>
     <div style={{ 
-      fontSize: window.innerWidth <= 768 ? 24 : window.innerWidth <= 1024 ? 28 : 32, 
+      fontSize: window.innerWidth <= 768 ? 24 : window.innerWidth <= 1024 ? 28 : 30, 
       fontWeight: 800, 
       color: '#0F172A', 
       lineHeight: 1, 
@@ -423,17 +532,17 @@ const StatCard = ({ label, value }) => (
   <div style={{
     background: '#ffffff',
     border: '1px solid #E2E8F0',
-    borderRadius: 12,
-    padding: window.innerWidth <= 768 ? 12 : 16,
-    boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 8px 24px rgba(30,58,95,0.08)',
+    borderRadius: 14,
+    padding: window.innerWidth <= 768 ? 14 : 18,
+    boxShadow: '0 1px 3px rgba(15,23,42,0.05), 0 4px 16px rgba(30,58,95,0.06)',
   }}>
     <div style={{ 
       fontSize: window.innerWidth <= 768 ? 10 : 11, 
-      fontWeight: 600, 
-      color: '#64748B', 
-      letterSpacing: '0.5px', 
+      fontWeight: 700, 
+      color: '#94A3B8', 
+      letterSpacing: '0.8px', 
       textTransform: 'uppercase',
-      marginBottom: window.innerWidth <= 768 ? 6 : 8
+      marginBottom: window.innerWidth <= 768 ? 8 : 10
     }}>
       {label}
     </div>
@@ -456,7 +565,7 @@ const ActivityItem = ({ activity, isLast }) => {
       case 'warning': return '#F59E0B';
       case 'info': return '#06B6D4';
       case 'primary': return '#3B82F6';
-      default: return '#64748B';
+      default: return '#94A3B8';
     }
   };
 
@@ -472,8 +581,8 @@ const ActivityItem = ({ activity, isLast }) => {
       display: 'flex', 
       alignItems: 'flex-start', 
       gap: window.innerWidth <= 768 ? 8 : 12,
-      padding: window.innerWidth <= 768 ? '12px 16px' : '16px 24px',
-      borderBottom: isLast ? 'none' : '1px solid #F1F5F9'
+      padding: window.innerWidth <= 768 ? '12px 16px' : '14px 24px',
+      borderBottom: isLast ? 'none' : '1px solid #F8FAFC'
     }}>
       <div 
         style={{ 
@@ -481,17 +590,17 @@ const ActivityItem = ({ activity, isLast }) => {
           height: 8, 
           borderRadius: '50%', 
           background: getActivityColor(type),
-          marginTop: 6,
+          marginTop: 5,
           flexShrink: 0
         }} 
       />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: window.innerWidth <= 768 ? 12 : 13, color: '#0F172A', lineHeight: 1.4, marginBottom: 4 }}>
-          <span style={{ fontWeight: 600 }}>{user}</span>{' '}
+        <div style={{ fontSize: window.innerWidth <= 768 ? 12 : 13, color: '#0F172A', lineHeight: 1.4, marginBottom: 3 }}>
+          <span style={{ fontWeight: 700 }}>{user}</span>{' '}
           <span style={{ color: '#64748B' }}>{action}</span>
         </div>
         <div style={{ fontSize: window.innerWidth <= 768 ? 10 : 11, color: '#94A3B8', fontWeight: 500 }}>
-          {time}{batch && ` • ${batch}`}
+          {time}{batch && ` · ${batch}`}
         </div>
       </div>
     </div>

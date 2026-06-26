@@ -1,6 +1,5 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
-import { store } from '../../app/store';
 import {
   fetchUsers,
   fetchBatches,
@@ -13,747 +12,621 @@ import {
   selectAdminBatches,
 } from '../../features/admin/adminSlice';
 
-const UserManagement = () => {
+// ── Role / status palette (same conventions as Sessions' SC) ──────────────────
+const ROLE_COLORS = {
+  trainer: '#2f6f9b',
+  trainee: '#7c3aed',
+  hr: '#16a05f',
+};
+const ROLES = ['trainer', 'trainee', 'hr'];
+
+// Toast look-up (icon glyph + colours) — identical to Sessions.
+const TOAST = {
+  success: { color: '#16a05f', border: '#bfe6d0', glyph: '✓' },
+  error: { color: '#c0392b', border: '#f3c2bd', glyph: '✕' },
+  warning: { color: '#b06f00', border: '#f0d9a8', glyph: '⚠' },
+  info: { color: '#2f6f9b', border: '#bcd6ea', glyph: 'ℹ' },
+};
+
+// ── Windowed page list: [1, '…', 4, 5, 6, '…', 20] ─────────────────────────────
+function pageList(cur, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const set = new Set([1, 2, total - 1, total, cur - 1, cur, cur + 1]);
+  const nums = [...set].filter((n) => n >= 1 && n <= total).sort((a, b) => a - b);
+  const out = [];
+  let prev = 0;
+  for (const n of nums) {
+    if (prev && n - prev > 1) out.push('…');
+    out.push(n);
+    prev = n;
+  }
+  return out;
+}
+
+// ── Tiny responsive hook (re-renders on resize, unlike inline innerWidth) ─────
+function useIsMobile(bp = 720) {
+  const get = () =>
+    typeof window !== 'undefined' && window.matchMedia(`(max-width:${bp}px)`).matches;
+  const [mobile, setMobile] = useState(get);
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width:${bp}px)`);
+    const onChange = (e) => setMobile(e.matches);
+    mq.addEventListener ? mq.addEventListener('change', onChange) : mq.addListener(onChange);
+    return () =>
+      mq.removeEventListener ? mq.removeEventListener('change', onChange) : mq.removeListener(onChange);
+  }, [bp]);
+  return mobile;
+}
+
+const EMPTY_ERRORS = {};
+
+export default function UserManagement() {
   const dispatch = useAppDispatch();
+  const isMobile = useIsMobile();
+
   const users = useAppSelector(selectAdminUsers);
   const status = useAppSelector(selectAdminUsersStatus);
   const batches = useAppSelector(selectAdminBatches);
-  const authToken = useAppSelector(state => state.auth.token); // Get auth token
+  const authToken = useAppSelector((state) => state.auth.token);
 
-  const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState('All Roles');
-  const [showModal, setShowModal] = useState(false);
-  const [editingUser, setEditingUser] = useState(null);
-  const [toast, setToast] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [modal, setModal] = useState(null); // null | { mode: 'create'|'edit', user }
+  const [busyId, setBusyId] = useState(null);
+
+  // ── Built-in toast + confirm (no external libs) — identical pattern to Sessions ──
+  const [toasts, setToasts] = useState([]);
+  const pushToast = (icon, title) => {
+    const id = Date.now() + Math.random();
+    setToasts((t) => [...t, { id, icon, title }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2600);
+  };
+  const [confirmState, setConfirmState] = useState(null);
+  const confirm = (opts) => new Promise((resolve) => setConfirmState({ ...opts, resolve }));
+  const resolveConfirm = (val) => {
+    if (confirmState) confirmState.resolve(val);
+    setConfirmState(null);
+  };
+
+  // ── Filters ──
+  const [q, setQ] = useState('');
+  const [fRole, setFRole] = useState('all');
+  const [fProgram, setFProgram] = useState('all');
+
+  // ── Pagination ──
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const loading = status === 'loading';
 
   useEffect(() => {
     dispatch(fetchUsers());
     dispatch(fetchBatches());
   }, [dispatch]);
 
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+  // ── Filtering ──
+  const filtered = useMemo(() => {
+    let list = users;
+    const needle = q.trim().toLowerCase();
+    if (needle) {
+      list = list.filter(
+        (u) =>
+          (u.name || '').toLowerCase().includes(needle) ||
+          (u.email || '').toLowerCase().includes(needle)
+      );
+    }
+    if (fRole !== 'all') list = list.filter((u) => u.role === fRole);
+    // Program filter is a placeholder until program data is wired up server-side.
+    if (fProgram !== 'all') list = list.filter((u) => (u.program || 'YIEP') === fProgram);
+    return list;
+  }, [users, q, fRole, fProgram]);
+
+  const hasFilters = !!(q.trim() || fRole !== 'all' || fProgram !== 'all');
+  const clearFilters = () => {
+    setQ('');
+    setFRole('all');
+    setFProgram('all');
   };
 
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = user.name?.toLowerCase().includes(search.toLowerCase()) ||
-      user.email?.toLowerCase().includes(search.toLowerCase());
-    const matchesRole = roleFilter === 'All Roles' || user.role === roleFilter.toLowerCase();
-    return matchesSearch && matchesRole;
-  });
-
-  // Pagination logic
-  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentUsers = filteredUsers.slice(startIndex, endIndex);
-
-  const handlePageChange = (page) => {
-    setCurrentPage(page);
-  };
-
-  // Reset to first page when filters change
   useEffect(() => {
-    setCurrentPage(1);
-  }, [search, roleFilter]);
+    setPage(1);
+  }, [q, fRole, fProgram]);
 
-  const handleToggleStatus = async (userId, currentStatus) => {
-    try {
-      await dispatch(toggleUserStatus({ userId, isActive: !currentStatus })).unwrap();
-      showToast(`User ${!currentStatus ? 'enabled' : 'disabled'} successfully`);
-    } catch (err) {
-      showToast('Failed to update user status', 'error');
-    }
-  };
+  // ── Derived pagination (over FILTERED) ──
+  const total = filtered.length;
+  const allTotal = users.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+  const pageItems = useMemo(
+    () => filtered.slice((page - 1) * pageSize, page * pageSize),
+    [filtered, page, pageSize]
+  );
+  const startIdx = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const endIdx = Math.min(total, page * pageSize);
 
-  const handleDeleteUser = async (userId, userName) => {
-    if (window.confirm(`Delete ${userName}?`)) {
-      try {
-        await dispatch(deleteUser(userId)).unwrap();
-        showToast(`User deleted successfully`);
-      } catch (err) {
-        showToast('Failed to delete user', 'error');
-      }
-    }
-  };
+  // ── Modal helpers ──
+  const openCreate = () => setModal({ mode: 'create', user: null });
+  const openEdit = (u) => setModal({ mode: 'edit', user: { ...u, _id: u._id || u.id } });
+  const closeModal = () => setModal(null);
 
+  // ── Save (create / update) ──
   const handleSaveUser = async (userData) => {
-    console.log('handleSaveUser called with:', { editingUser, userData }); // Debug log
-
     try {
-      if (editingUser) {
-        // For editing, we need a valid user ID
-        const userId = editingUser._id || editingUser.id;
-        console.log('Attempting to update user with ID:', userId);
-
+      if (modal.mode === 'edit') {
+        const userId = modal.user._id || modal.user.id;
         if (!userId) {
-          showToast('Error: No user ID found for editing', 'error');
+          pushToast('error', 'No user ID found for editing.');
           return;
         }
-
-        // Get token from Redux state
         const token = authToken || localStorage.getItem('token') || sessionStorage.getItem('token');
-
-        // Make direct API call instead of using Redux
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/api/admin/users/${userId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(userData)
-        });
-
+        const response = await fetch(
+          `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/api/admin/users/${userId}`,
+          {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(userData),
+          }
+        );
         const result = await response.json();
-        console.log('Direct API response:', result);
-
-        if (!response.ok) {
-          throw new Error(result.message || 'Failed to update user');
-        }
-
-        // Refresh the users list
+        if (!response.ok) throw new Error(result.message || 'Failed to update user');
         dispatch(fetchUsers());
-        showToast('User updated successfully');
+        pushToast('success', 'User updated successfully');
       } else {
-        console.log('Creating new user');
         await dispatch(createUser(userData)).unwrap();
-        showToast('User created successfully');
+        pushToast('success', 'User created successfully');
       }
-
-      setShowModal(false);
-      setEditingUser(null);
+      setModal(null);
     } catch (err) {
-      console.error('Save user error:', err);
-      showToast(err.message || 'Failed to save user', 'error');
+      pushToast('error', err.message || 'Failed to save user');
+      throw err;
     }
   };
 
-  if (status === 'loading') {
+  // ── Toggle enable/disable ──
+  const handleToggleStatus = async (u) => {
+    const userId = u._id || u.id;
+    setBusyId(userId);
+    try {
+      await dispatch(toggleUserStatus({ userId, isActive: !u.isActive })).unwrap();
+      pushToast('success', `User ${!u.isActive ? 'enabled' : 'disabled'} successfully`);
+    } catch (err) {
+      pushToast('error', typeof err === 'string' ? err : 'Failed to update user status');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  // ── Delete (built-in confirm instead of window.confirm) ──
+  const handleDeleteUser = async (u) => {
+    const userId = u._id || u.id;
+    const ok = await confirm({
+      title: 'Delete this user?',
+      text: `"${u.name || 'This user'}" will be permanently removed. This cannot be undone.`,
+      confirmText: 'Yes, delete it',
+      danger: true,
+    });
+    if (!ok) return;
+    setBusyId(userId);
+    try {
+      await dispatch(deleteUser(userId)).unwrap();
+      pushToast('success', 'User deleted successfully');
+    } catch (err) {
+      pushToast('error', typeof err === 'string' ? err : 'Failed to delete user');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  // ── Row action buttons (shared by table + cards) — same shape as Sessions' RowActions ──
+  const RowActions = ({ u }) => {
+    const userId = u._id || u.id;
+    const rowBusy = busyId === userId;
+
+    const btnStyle = (bg, border, text, disabled) => ({
+      padding: '6px 10px',
+      borderRadius: 6,
+      fontSize: 12,
+      fontWeight: 700,
+      cursor: disabled ? 'not-allowed' : 'pointer',
+      opacity: disabled ? 0.45 : 1,
+      fontFamily: 'inherit',
+      border: `1px solid ${border}`,
+      background: bg,
+      color: text,
+      transition: 'all 0.15s ease',
+      whiteSpace: 'nowrap',
+    });
+
     return (
-      <div style={{ padding: '32px', textAlign: 'center' }}>
-        <div>Loading users...</div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{
-      padding: window.innerWidth <= 768 ? '8px 12px 12px 12px' : '12px 16px 16px 16px',
-      fontFamily: 'Inter, system-ui, sans-serif',
-      background: '#F8FAFC',
-      height: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden'
-    }}>
-      {/* Header */}
-      <div style={{ marginBottom: window.innerWidth <= 768 ? 12 : 16, flexShrink: 0 }}>
-        <h1 style={{
-          fontSize: window.innerWidth <= 768 ? 18 : 22,
-          fontWeight: 700,
-          color: '#1E293B',
-          margin: '0 0 3px'
-        }}>
-          User & Role Management
-        </h1>
-        <p style={{
-          fontSize: window.innerWidth <= 768 ? 11 : 13,
-          color: '#64748B',
-          margin: 0
-        }}>
-          Manage platform users, roles, and YBLP mentor assignments
-        </p>
-      </div>
-
-      {/* Filters */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 12,
-        gap: 16,
-        flexWrap: 'wrap',
-        flexShrink: 0,
-        flexDirection: window.innerWidth <= 768 ? 'column' : 'row'
-      }}>
-        <div style={{
-          display: 'flex',
-          gap: window.innerWidth <= 768 ? 8 : 16,
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          width: window.innerWidth <= 768 ? '100%' : 'auto'
-        }}>
-          <input
-            type="text"
-            placeholder={window.innerWidth <= 768 ? "Search..." : "Search by name / email..."}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{
-              padding: window.innerWidth <= 768 ? '10px 12px' : '12px 16px',
-              borderRadius: 8,
-              border: '1px solid #E2E8F0',
-              fontSize: 14,
-              width: window.innerWidth <= 768 ? '100%' : 280,
-              outline: 'none'
-            }}
-          />
-
-          <select
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
-            style={{
-              padding: window.innerWidth <= 768 ? '10px 12px' : '12px 16px',
-              borderRadius: 8,
-              border: '1px solid #E2E8F0',
-              fontSize: 14,
-              outline: 'none',
-              background: '#fff',
-              width: window.innerWidth <= 768 ? '100%' : 'auto'
-            }}
-          >
-            <option>All Roles</option>
-            <option>Trainer</option>
-            <option>Trainee</option>
-            <option>HR</option>
-          </select>
-
-          <select
-            style={{
-              padding: window.innerWidth <= 768 ? '10px 12px' : '12px 16px',
-              borderRadius: 8,
-              border: '1px solid #E2E8F0',
-              fontSize: 14,
-              outline: 'none',
-              background: '#fff',
-              width: window.innerWidth <= 768 ? '100%' : 'auto'
-            }}
-          >
-            <option>All Programs</option>
-            <option>YIEP</option>
-            <option>YBLP</option>
-            <option>Both</option>
-          </select>
-        </div>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-start', flexWrap: 'wrap' }}>
+        <button
+          onClick={() => openEdit(u)}
+          disabled={rowBusy}
+          style={btnStyle('#F8FAFC', '#E2E8F0', '#475569', rowBusy)}
+          title="Edit user"
+        >
+          ✏️
+        </button>
 
         <button
-          onClick={() => {
-            setEditingUser(null);
-            setShowModal(true);
-          }}
-          style={{
-            padding: window.innerWidth <= 768 ? '10px 16px' : '12px 24px',
-            background: '#1E40AF',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 8,
-            fontSize: 14,
-            fontWeight: 600,
-            cursor: 'pointer',
-            width: window.innerWidth <= 768 ? '100%' : 'auto'
-          }}
+          onClick={() => handleToggleStatus(u)}
+          disabled={rowBusy}
+          style={btnStyle(
+            u.isActive ? '#FEF3C7' : '#F0FDF4',
+            u.isActive ? '#FDE68A' : '#BBF7D0',
+            u.isActive ? '#B45309' : '#16A34A',
+            rowBusy
+          )}
+          title={rowBusy ? 'Please wait…' : u.isActive ? 'Disable user' : 'Enable user'}
         >
-          + Create User
+          {rowBusy ? '…' : u.isActive ? '🛑' : '✅'}
+        </button>
+
+        <button
+          onClick={() => handleDeleteUser(u)}
+          disabled={rowBusy}
+          style={btnStyle('#FEF2F2', '#FECACA', '#DC2626', rowBusy)}
+          title="Delete user"
+        >
+          🗑️
         </button>
       </div>
+    );
+  };
 
-      {/* Users Table */}
-      <div style={{
-        flex: 1,
-        overflowY: 'auto',
-        overflowX: window.innerWidth <= 768 ? 'auto' : 'hidden',
-        background: '#fff',
-        borderRadius: '12px',
-        border: '1px solid #E2E8F0',
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
+  const RoleBadge = ({ role }) => (
+    <span style={badge(ROLE_COLORS[role] || '#657691')}>
+      {role ? role.charAt(0).toUpperCase() + role.slice(1) : 'N/A'}
+    </span>
+  );
+
+  const StatusBadge = ({ active }) => (
+    <span style={badge(active ? '#16a05f' : '#b06f00')}>{active ? 'active' : 'inactive'}</span>
+  );
+
+  const Avatar = ({ u }) => (
+    <div
+      style={{
+        width: 32,
+        height: 32,
+        borderRadius: '50%',
+        background: ROLE_COLORS[u.role] || '#657691',
         display: 'flex',
-        flexDirection: 'column',
-        marginBottom: '16px',
-        minHeight: '500px'
-      }}>
-        <table style={{
-          width: '100%',
-          borderCollapse: 'collapse',
-          flex: 1,
-          minWidth: window.innerWidth <= 768 ? '800px' : 'auto'
-        }}>
-          <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
-            <tr style={{ background: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>
-              <th style={{
-                padding: '12px 16px',
-                textAlign: 'left',
-                fontSize: 12,
-                fontWeight: 600,
-                color: '#64748B',
-                textTransform: 'uppercase'
-              }}>NAME</th>
-              <th style={{
-                padding: '12px 16px',
-                textAlign: 'left',
-                fontSize: 12,
-                fontWeight: 600,
-                color: '#64748B',
-                textTransform: 'uppercase'
-              }}>EMAIL</th>
-              <th style={{
-                padding: '12px 16px',
-                textAlign: 'left',
-                fontSize: 12,
-                fontWeight: 600,
-                color: '#64748B',
-                textTransform: 'uppercase'
-              }}>ROLE</th>
-              <th style={{
-                padding: '12px 16px',
-                textAlign: 'left',
-                fontSize: 12,
-                fontWeight: 600,
-                color: '#64748B',
-                textTransform: 'uppercase'
-              }}>PROGRAM</th>
-              <th style={{
-                padding: '12px 16px',
-                textAlign: 'left',
-                fontSize: 12,
-                fontWeight: 600,
-                color: '#64748B',
-                textTransform: 'uppercase'
-              }}>BATCH</th>
-              <th style={{
-                padding: '12px 16px',
-                textAlign: 'left',
-                fontSize: 12,
-                fontWeight: 600,
-                color: '#64748B',
-                textTransform: 'uppercase'
-              }}>STATUS</th>
-              <th style={{
-                padding: '12px 16px',
-                textAlign: 'center',
-                fontSize: 12,
-                fontWeight: 600,
-                color: '#64748B',
-                textTransform: 'uppercase'
-              }}>ACTIONS</th>
-            </tr>
-          </thead>
-          <tbody>
-            {currentUsers.map((user, index) => (
-              <tr key={user._id || user.id || index} style={{
-                borderBottom: '1px solid #E2E8F0',
-                background: index % 2 === 0 ? '#fff' : '#FAFBFC',
-                transition: 'background-color 0.2s ease'
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: 700,
+        flexShrink: 0,
+      }}
+    >
+      {u.name?.charAt(0)?.toUpperCase() || 'U'}
+    </div>
+  );
+
+  // ── Pagination bar — identical structure to Sessions' Pager ──
+  const Pager = () => {
+    if (loading || total === 0) return null;
+    return (
+      <div style={pagerWrap}>
+        <span style={pagerInfo}>
+          Showing {startIdx}–{endIdx} of {total}
+        </span>
+        <div style={pagerBtns}>
+          <button
+            style={pgBtn(page === 1)}
+            disabled={page === 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            ‹ Prev
+          </button>
+          {pageList(page, totalPages).map((n, idx) =>
+            n === '…' ? (
+              <span key={`e${idx}`} style={pgEllipsis}>
+                …
+              </span>
+            ) : (
+              <button key={n} onClick={() => setPage(n)} style={pgNum(n === page)}>
+                {n}
+              </button>
+            )
+          )}
+          <button
+            style={pgBtn(page === totalPages)}
+            disabled={page === totalPages}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          >
+            Next ›
+          </button>
+        </div>
+        {!isMobile && (
+          <label style={pagerInfo}>
+            Per page{' '}
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(1);
               }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#F1F5F9';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = index % 2 === 0 ? '#fff' : '#FAFBFC';
-                }}>
-                <td style={{
-                  padding: window.innerWidth <= 768 ? '6px 10px' : '10px 14px',
-                  fontSize: window.innerWidth <= 768 ? 12 : 13,
-                  fontWeight: 500,
-                  color: '#1E293B',
-                  height: '45px'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: '50%',
-                      background: `linear-gradient(135deg, ${user.role === 'trainer' ? '#3B82F6, #1D4ED8' : user.role === 'trainee' ? '#8B5CF6, #7C3AED' : '#10B981, #059669'})`,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#fff',
-                      fontSize: '12px',
-                      fontWeight: '600'
-                    }}>
-                      {user.name?.charAt(0)?.toUpperCase() || 'U'}
-                    </div>
-                    <span>{user.name || '—'}</span>
-                  </div>
-                </td>
-                <td style={{
-                  padding: '12px 16px',
-                  fontSize: 14,
-                  color: '#64748B',
-                  height: '50px'
-                }}>
-                  {user.email || '—'}
-                </td>
-                <td style={{
-                  padding: '12px 16px',
-                  height: '50px'
-                }}>
-                  <span style={{
-                    padding: '4px 12px',
-                    borderRadius: 16,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    background: user.role === 'trainer' ? '#DBEAFE' : user.role === 'trainee' ? '#EDE9FE' : '#DCFCE7',
-                    color: user.role === 'trainer' ? '#1D4ED8' : user.role === 'trainee' ? '#7C3AED' : '#16A34A',
-                    border: `1px solid ${user.role === 'trainer' ? '#BFDBFE' : user.role === 'trainee' ? '#DDD6FE' : '#BBF7D0'}`
-                  }}>
-                    {user.role?.charAt(0).toUpperCase() + user.role?.slice(1) || 'N/A'}
-                  </span>
-                </td>
-                <td style={{
-                  padding: '12px 16px',
-                  fontSize: 14,
-                  color: '#64748B',
-                  height: '50px'
-                }}>
-                  <span style={{
-                    padding: '4px 8px',
-                    borderRadius: 8,
-                    fontSize: 11,
-                    fontWeight: 600,
-                    background: '#EEF2FF',
-                    color: '#3730A3',
-                    border: '1px solid #C7D2FE'
-                  }}>
-                    YIEP
-                  </span>
-                </td>
-                <td style={{
-                  padding: '12px 16px',
-                  fontSize: 14,
-                  color: '#64748B',
-                  height: '50px'
-                }}>
-                  {/* {user.batchId?.name ? (
-                    <span style={{
-                      padding: '4px 8px',
-                      borderRadius: 8,
-                      fontSize: 11,
-                      fontWeight: 500,
-                      background: '#F0F9FF',
-                      color: '#0369A1',
-                      border: '1px solid #BAE6FD'
-                    }}>
-                      {user.batchId.name}
-                    </span>
-                  ) : (
-                    <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>Not assigned</span>
-                  )} */}
-                  {user.batchIds?.length > 0 ? (
-                    <span style={{
-                      padding: '4px 8px',
-                      borderRadius: 8,
-                      fontSize: 11,
-                      fontWeight: 500,
-                      background: '#F0F9FF',
-                      color: '#0369A1',
-                      border: '1px solid #BAE6FD'
-                    }}>
-                      {user.batchIds.map(batch => batch.name).join(', ')}
-                    </span>
-                  ) : (
-                    <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>
-                      Not assigned
-                    </span>
-                  )}
-                </td>
-                <td style={{
-                  padding: '12px 16px',
-                  height: '50px'
-                }}>
-                  <span style={{
-                    padding: '4px 12px',
-                    borderRadius: 16,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    background: user.isActive ? '#DCFCE7' : '#FEF3C7',
-                    color: user.isActive ? '#16A34A' : '#D97706',
-                    border: `1px solid ${user.isActive ? '#BBF7D0' : '#FDE68A'}`
-                  }}>
-                    {user.isActive ? 'Active' : 'Inactive'}
-                  </span>
-                </td>
-                <td style={{ padding: window.innerWidth <= 768 ? '6px 10px' : '10px 14px', textAlign: 'center', height: '45px' }}>
-                  <div style={{ display: 'flex', gap: window.innerWidth <= 768 ? 4 : 8, justifyContent: 'center', flexWrap: window.innerWidth <= 768 ? 'wrap' : 'nowrap' }}>
-                    <button
-                      onClick={() => {
-                        const userWithId = {
-                          ...user,
-                          _id: user._id || user.id
-                        };
-                        setEditingUser(userWithId);
-                        setShowModal(true);
-                      }}
-                      title="Edit user"
-                      style={{
-                        padding: window.innerWidth <= 768 ? '6px 8px' : '8px 12px',
-                        background: '#F8FAFC',
-                        color: '#475569',
-                        border: '1px solid #E2E8F0',
-                        borderRadius: 6,
-                        cursor: 'pointer',
-                        fontSize: window.innerWidth <= 768 ? '11px' : '12px',
-                        fontWeight: '500',
-                        transition: 'all 0.2s'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.target.style.background = '#E2E8F0';
-                        e.target.style.transform = 'translateY(-1px)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.target.style.background = '#F8FAFC';
-                        e.target.style.transform = 'translateY(0)';
-                      }}
-                    >
-                      {window.innerWidth <= 768 ? '✏️' : '✏️ Edit'}
-                    </button>
-
-                    <button
-                      onClick={() => handleToggleStatus(user._id || user.id || `temp-${index}`, user.isActive)}
-                      title={user.isActive ? 'Disable user' : 'Enable user'}
-                      style={{
-                        padding: window.innerWidth <= 768 ? '6px 8px' : '8px 12px',
-                        background: user.isActive ? '#FEF2F2' : '#F0FDF4',
-                        color: user.isActive ? '#DC2626' : '#16A34A',
-                        border: `1px solid ${user.isActive ? '#FECACA' : '#BBF7D0'}`,
-                        borderRadius: 6,
-                        cursor: 'pointer',
-                        fontSize: window.innerWidth <= 768 ? '11px' : '12px',
-                        fontWeight: '500',
-                        transition: 'all 0.2s'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.target.style.transform = 'translateY(-1px)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.target.style.transform = 'translateY(0)';
-                      }}
-                    >
-                      {user.isActive ? '❌' : '✅'}
-                    </button>
-
-                    <button
-                      onClick={() => handleDeleteUser(user._id || user.id || `temp-${index}`, user.name)}
-                      title="Delete user"
-                      style={{
-                        padding: window.innerWidth <= 768 ? '6px 8px' : '8px 12px',
-                        background: '#FEF2F2',
-                        color: '#DC2626',
-                        border: '1px solid #FECACA',
-                        borderRadius: 6,
-                        cursor: 'pointer',
-                        fontSize: window.innerWidth <= 768 ? '11px' : '12px',
-                        fontWeight: '500',
-                        transition: 'all 0.2s'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.target.style.background = '#FCA5A5';
-                        e.target.style.transform = 'translateY(-1px)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.target.style.background = '#FEF2F2';
-                        e.target.style.transform = 'translateY(0)';
-                      }}
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {/* Fill remaining space with empty rows only when there's data */}
-            {currentUsers.length > 0 && Array.from({ length: Math.max(0, 10 - currentUsers.length) }, (_, i) => (
-              <tr key={`empty-${i}`} style={{
-                background: (currentUsers.length + i) % 2 === 0 ? '#fff' : '#FAFBFC',
-                height: '45px'
-              }}>
-                <td colSpan={7} style={{ padding: '10px 14px', height: '45px', border: 'none' }}></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {filteredUsers.length === 0 && (
-          <div style={{
-            padding: '48px',
-            textAlign: 'center',
-            color: '#64748B',
-            fontSize: '14px'
-          }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>👥</div>
-            <h3 style={{ margin: '0 0 8px', color: '#1E293B' }}>No users found</h3>
-            <p style={{ margin: 0 }}>Try adjusting your search criteria or create a new user.</p>
-          </div>
+              style={{ ...input, width: 'auto', display: 'inline-block', padding: '4px 8px' }}
+            >
+              {[10, 20, 40].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
         )}
       </div>
+    );
+  };
 
-      {/* Fixed Pagination */}
-      {filteredUsers.length > 0 && (
-        <div style={{
+  // ── Render ──
+  return (
+    <div style={{ padding: isMobile ? 16 : 32, fontFamily: 'Public Sans, system-ui, sans-serif' }}>
+      {/* Header */}
+      <div
+        style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '12px 16px',
-          background: '#fff',
-          borderRadius: '8px',
-          border: '1px solid #E2E8F0',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
-          flexShrink: 0
-        }}>
-          <div style={{ fontSize: '14px', color: '#64748B' }}>
-            Showing {startIndex + 1}-{Math.min(endIndex, filteredUsers.length)} of {filteredUsers.length} users
-          </div>
+          marginBottom: 16,
+          gap: 12,
+          flexWrap: 'wrap',
+        }}
+      >
+        <div>
+          <h2 style={{ fontSize: isMobile ? 19 : 22, fontWeight: 800, margin: 0, color: '#172033' }}>
+            Users ({total}
+            {total !== allTotal ? ` of ${allTotal}` : ''})
+          </h2>
+          <p style={{ fontSize: 13, color: '#657691', margin: '4px 0 0' }}>
+            Manage platform users, roles, and YBLP mentor assignments
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, width: isMobile ? '100%' : 'auto' }}>
+          <button
+            onClick={() => {
+              dispatch(fetchUsers());
+              dispatch(fetchBatches());
+            }}
+            style={btnGhost}
+          >
+            ↻ Refresh
+          </button>
+          <button onClick={openCreate} style={btnSchedule(isMobile)}>
+            ＋ Create User
+          </button>
+        </div>
+      </div>
 
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <button
-              onClick={() => handlePageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-              style={{
-                padding: '8px 12px',
-                background: currentPage === 1 ? '#F8FAFC' : '#fff',
-                color: currentPage === 1 ? '#94A3B8' : '#475569',
-                border: '1px solid #E2E8F0',
-                borderRadius: '6px',
-                fontSize: '14px',
-                cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                transition: 'all 0.2s'
-              }}
-            >
-              ← Previous
-            </button>
+      {/* Filter bar */}
+      <div style={filterBar(isMobile)}>
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="🔎  Search by name or email…"
+          style={input}
+        />
+        <select value={fRole} onChange={(e) => setFRole(e.target.value)} style={input}>
+          <option value="all">All roles</option>
+          {ROLES.map((r) => (
+            <option key={r} value={r}>
+              {r.charAt(0).toUpperCase() + r.slice(1)}
+            </option>
+          ))}
+        </select>
+        <select value={fProgram} onChange={(e) => setFProgram(e.target.value)} style={input}>
+          <option value="all">All programs</option>
+          <option value="YIEP">YIEP</option>
+          <option value="YBLP">YBLP</option>
+          <option value="Both">Both</option>
+        </select>
+        <button onClick={clearFilters} disabled={!hasFilters} style={btnGhost}>
+          Clear
+        </button>
+      </div>
 
-            {Array.from({ length: totalPages }, (_, i) => i + 1)
-              .filter(page => {
-                const distance = Math.abs(page - currentPage);
-                return distance <= 2 || page === 1 || page === totalPages;
-              })
-              .map((page, index, array) => {
-                const prevPage = array[index - 1];
-                const showEllipsis = prevPage && page - prevPage > 1;
-
-                return (
-                  <React.Fragment key={page}>
-                    {showEllipsis && (
-                      <span style={{ padding: '8px 4px', color: '#94A3B8' }}>...</span>
-                    )}
-                    <button
-                      onClick={() => handlePageChange(page)}
-                      style={{
-                        padding: '8px 12px',
-                        background: currentPage === page ? '#3B82F6' : '#fff',
-                        color: currentPage === page ? '#fff' : '#475569',
-                        border: `1px solid ${currentPage === page ? '#3B82F6' : '#E2E8F0'}`,
-                        borderRadius: '6px',
-                        fontSize: '14px',
-                        fontWeight: currentPage === page ? '600' : '400',
-                        cursor: 'pointer',
-                        minWidth: '40px',
-                        transition: 'all 0.2s'
-                      }}
+      {/* DESKTOP: table */}
+      {!isMobile && (
+        <div
+          style={{
+            background: '#fff',
+            borderRadius: 10,
+            overflow: 'hidden',
+            boxShadow: '0 1px 2px rgba(23,32,51,.08), 0 12px 28px rgba(31,61,99,.05)',
+            border: '1px solid #dbe3ed',
+          }}
+        >
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 820 }}>
+              <thead>
+                <tr style={{ background: '#f8fafc', color: '#657691' }}>
+                  {['Name', 'Email', 'Role', 'Program', 'Batch', 'Status', 'Actions'].map((h) => (
+                    <th key={h} style={th}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} style={emptyCell}>
+                      Loading users…
+                    </td>
+                  </tr>
+                ) : total === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={emptyCell}>
+                      {hasFilters
+                        ? 'No users match your filters.'
+                        : 'No users found. Click “Create User” to add one.'}
+                    </td>
+                  </tr>
+                ) : (
+                  pageItems.map((u, i) => (
+                    <tr
+                      key={u._id || u.id || i}
+                      style={{ background: i % 2 ? '#f8fafc' : '#fff', borderBottom: '1px solid #dbe3ed' }}
                     >
-                      {page}
-                    </button>
-                  </React.Fragment>
-                );
-              })}
-
-            <button
-              onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-              style={{
-                padding: '8px 12px',
-                background: currentPage === totalPages ? '#F8FAFC' : '#fff',
-                color: currentPage === totalPages ? '#94A3B8' : '#475569',
-                border: '1px solid #E2E8F0',
-                borderRadius: '6px',
-                fontSize: '14px',
-                cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-                transition: 'all 0.2s'
-              }}
-            >
-              Next →
-            </button>
+                      <td style={td}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <Avatar u={u} />
+                          <span style={{ fontWeight: 600, color: '#172033' }}>{u.name || '—'}</span>
+                        </div>
+                      </td>
+                      <td style={td}>{u.email || '—'}</td>
+                      <td style={{ padding: '11px 16px' }}>
+                        <RoleBadge role={u.role} />
+                      </td>
+                      <td style={td}>
+                        <span style={programPill}>{u.program || 'YIEP'}</span>
+                      </td>
+                      <td style={td}>
+                        {u.batchIds?.length > 0 ? (
+                          <span style={batchPill}>{u.batchIds.map((b) => b.name).join(', ')}</span>
+                        ) : (
+                          <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>Not assigned</span>
+                        )}
+                      </td>
+                      <td style={{ padding: '11px 16px' }}>
+                        <StatusBadge active={u.isActive} />
+                      </td>
+                      <td style={{ padding: '8px 16px' }}>
+                        <RowActions u={u} />
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
-      {/* Modal */}
-      {showModal && (
+      {/* MOBILE: cards */}
+      {isMobile && (
+        <div style={{ display: 'grid', gap: 12 }}>
+          {loading ? (
+            <div style={cardEmpty}>Loading users…</div>
+          ) : total === 0 ? (
+            <div style={cardEmpty}>
+              {hasFilters ? 'No users match your filters.' : 'No users found. Tap “Create User”.'}
+            </div>
+          ) : (
+            pageItems.map((u, i) => (
+              <div key={u._id || u.id || i} style={card}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Avatar u={u} />
+                    <span style={{ fontWeight: 700, color: '#172033', fontSize: 15 }}>{u.name || '—'}</span>
+                  </div>
+                  <StatusBadge active={u.isActive} />
+                </div>
+                <div style={cardMeta}>
+                  <b>Email:</b> {u.email || '—'}
+                </div>
+                <div style={cardMeta}>
+                  <b>Role:</b> <RoleBadge role={u.role} />
+                </div>
+                <div style={cardMeta}>
+                  <b>Program:</b> <span style={programPill}>{u.program || 'YIEP'}</span>
+                </div>
+                <div style={cardMeta}>
+                  <b>Batch:</b>{' '}
+                  {u.batchIds?.length > 0 ? (
+                    <span style={batchPill}>{u.batchIds.map((b) => b.name).join(', ')}</span>
+                  ) : (
+                    <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>Not assigned</span>
+                  )}
+                </div>
+                <div style={{ marginTop: 10 }}>
+                  <RowActions u={u} />
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      <Pager />
+
+      {/* Create / Edit modal */}
+      {modal && (
         <UserModal
-          user={editingUser}
+          user={modal.user}
           batches={batches}
-          onClose={() => {
-            setShowModal(false);
-            setEditingUser(null);
-          }}
+          isMobile={isMobile}
+          onClose={closeModal}
           onSave={handleSaveUser}
+          pushToast={pushToast}
         />
       )}
 
-      {/* Toast */}
-      {toast && (
-        <div style={{
-          position: 'fixed',
-          top: 20,
-          right: 20,
-          background: toast.type === 'error' ? '#FEF2F2' : '#F0FDF4',
-          color: toast.type === 'error' ? '#DC2626' : '#16A34A',
-          border: `1px solid ${toast.type === 'error' ? '#FECACA' : '#BBF7D0'}`,
-          borderRadius: 8,
-          padding: '12px 16px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-          zIndex: 1001
-        }}>
-          {toast.message}
+      {/* Confirm dialog (built-in, replaces window.confirm) */}
+      {confirmState && (
+        <div style={{ ...overlay, alignItems: 'center', zIndex: 1500 }} onMouseDown={() => resolveConfirm(false)}>
+          <div style={{ ...dialog, maxWidth: 420, marginTop: 0 }} onMouseDown={(e) => e.stopPropagation()}>
+            <div style={{ padding: '22px 22px 8px' }}>
+              <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: '#172033' }}>{confirmState.title}</h3>
+              {confirmState.text && (
+                <p style={{ margin: '10px 0 0', fontSize: 13.5, color: '#41506a', lineHeight: 1.5 }}>
+                  {confirmState.text}
+                </p>
+              )}
+            </div>
+            <div style={{ ...dialogFoot, borderTop: 'none' }}>
+              <button onClick={() => resolveConfirm(false)} style={btnGhost}>
+                Keep it
+              </button>
+              <button
+                onClick={() => resolveConfirm(true)}
+                style={{ ...btnPrimary, background: confirmState.danger ? '#c0392b' : '#2f6f9b' }}
+              >
+                {confirmState.confirmText || 'Confirm'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* CSS Animations */}
-      <style>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        
-        /* Custom scrollbar styles */
-        ::-webkit-scrollbar {
-          width: 8px;
-        }
-        
-        ::-webkit-scrollbar-track {
-          background: #F1F5F9;
-          border-radius: 4px;
-        }
-        
-        ::-webkit-scrollbar-thumb {
-          background: #CBD5E1;
-          border-radius: 4px;
-        }
-        
-        ::-webkit-scrollbar-thumb:hover {
-          background: #94A3B8;
-        }
-      `}</style>
+      {/* Toasts (built-in, stacked queue) */}
+      {toasts.length > 0 && (
+        <div style={toastWrap}>
+          {toasts.map((t) => {
+            const cfg = TOAST[t.icon] || TOAST.info;
+            return (
+              <div key={t.id} style={toastItem(cfg.border)}>
+                <span style={{ color: cfg.color, fontWeight: 800, fontSize: 15 }}>{cfg.glyph}</span>
+                <span>{t.title}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
-};
+}
 
-const UserModal = ({ user, batches, onClose, onSave }) => {
-  const [formData, setFormData] = useState({
+// ── Modal: create / edit user ──────────────────────────────────────────────────
+function UserModal({ user, batches, isMobile, onClose, onSave, pushToast }) {
+  const [form, setForm] = useState({
     name: user?.name || '',
     email: user?.email || '',
     role: user?.role || 'trainee',
     password: '',
-    batchIds: user?.batchIds?.map(b => b._id || b) || []
+    batchIds: user?.batchIds?.map((b) => b._id || b) || [],
   });
-  const [errors, setErrors] = useState({});
-  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState(EMPTY_ERRORS);
+  const [saving, setSaving] = useState(false);
   const [batchDropdownOpen, setBatchDropdownOpen] = useState(false);
-
   const dropdownRef = useRef(null);
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handler = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -764,276 +637,254 @@ const UserModal = ({ user, batches, onClose, onSave }) => {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const validateForm = () => {
-    const newErrors = {};
-    if (!formData.name.trim()) newErrors.name = 'Name is required';
-    if (!formData.email.trim()) newErrors.email = 'Email is required';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email))
-      newErrors.email = 'Please enter a valid email address';
-    if (!formData.role) newErrors.role = 'Role is required';
-    if (!user && !formData.password.trim())
-      newErrors.password = 'Password is required';
-    else if (!user && formData.password.length < 6)
-      newErrors.password = 'Password must be at least 6 characters';
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!validateForm()) return;
-    setLoading(true);
-    const submitData = { ...formData };
-    if (user && !submitData.password) delete submitData.password;
-    try {
-      await onSave(submitData);
-    } catch (err) {
-      console.error('Form submit error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleInputChange = (field, value) => {
-    setFormData({ ...formData, [field]: value });
-    if (errors[field]) setErrors({ ...errors, [field]: '' });
+  const setField = (k, v) => {
+    setForm((f) => ({ ...f, [k]: v }));
+    if (errors[k]) setErrors((e) => ({ ...e, [k]: '' }));
   };
 
   const toggleBatch = (batchId) => {
-    const exists = formData.batchIds.includes(batchId);
-    const updated = exists
-      ? formData.batchIds.filter(id => id !== batchId)
-      : [...formData.batchIds, batchId];
-    handleInputChange('batchIds', updated);
+    const exists = form.batchIds.includes(batchId);
+    setField('batchIds', exists ? form.batchIds.filter((id) => id !== batchId) : [...form.batchIds, batchId]);
+  };
+  const removeBatch = (batchId) => setField('batchIds', form.batchIds.filter((id) => id !== batchId));
+
+  const selectedBatches = batches?.filter((b) => form.batchIds.includes(b._id)) || [];
+
+  const validate = () => {
+    const e = {};
+    if (!form.name.trim()) e.name = 'Name is required.';
+    if (!form.email.trim()) e.email = 'Email is required.';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Please enter a valid email address.';
+    if (!form.role) e.role = 'Role is required.';
+    if (!user && !form.password.trim()) e.password = 'Password is required.';
+    else if (!user && form.password.length < 6) e.password = 'Password must be at least 6 characters.';
+    setErrors(e);
+    return Object.keys(e).length === 0;
   };
 
-  const removeBatch = (batchId) => {
-    handleInputChange('batchIds', formData.batchIds.filter(id => id !== batchId));
-  };
-
-  const selectedBatches = batches?.filter(b => formData.batchIds.includes(b._id)) || [];
-
-  const isMobile = window.innerWidth <= 768;
-  const inputStyle = {
-    width: '100%',
-    padding: isMobile ? '8px 10px' : '10px 12px',
-    border: '1px solid #E2E8F0',
-    borderRadius: 8,
-    fontSize: isMobile ? 13 : 14,
-    outline: 'none',
-    boxSizing: 'border-box'
-  };
-  const labelStyle = {
-    display: 'block',
-    marginBottom: 4,
-    fontSize: isMobile ? 13 : 14,
-    fontWeight: 500
+  const handleSave = async () => {
+    if (!validate()) return;
+    const payload = { ...form };
+    if (user && !payload.password) delete payload.password;
+    setSaving(true);
+    try {
+      await onSave(payload);
+    } catch (err) {
+      // onSave already pushes a toast on failure; keep the modal open.
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <div style={{
-      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      background: 'rgba(0,0,0,0.5)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      zIndex: 1000,
-      padding: isMobile ? '20px' : '0'
-    }}>
-      <div style={{
-        background: '#fff', borderRadius: 12,
-        padding: isMobile ? 16 : 24,
-        width: '100%', maxWidth: isMobile ? '100%' : 500,
-        maxHeight: '90vh', overflow: 'auto'
-      }}>
-        <h3 style={{ margin: '0 0 20px', fontSize: isMobile ? 16 : 18, fontWeight: 600 }}>
-          {user ? 'Edit User' : 'Create New User'}
-        </h3>
+    <div style={overlay} onMouseDown={() => !saving && onClose()}>
+      <div style={{ ...dialog, maxWidth: isMobile ? '100%' : 600 }} onMouseDown={(e) => e.stopPropagation()}>
+        <div style={dialogHead}>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#172033' }}>
+            {user ? 'Edit user' : 'Create a user'}
+          </h3>
+          <button onClick={onClose} style={bannerClose}>
+            ×
+          </button>
+        </div>
 
-        <form onSubmit={handleSubmit}>
-          {/* Name */}
-          <div style={{ marginBottom: 16 }}>
-            <label style={labelStyle}>Name *</label>
+        <div style={{ padding: 20, display: 'grid', gap: 14 }}>
+          <Field label="Name">
             <input
-              type="text"
-              value={formData.name}
-              onChange={e => handleInputChange('name', e.target.value)}
-              style={{ ...inputStyle, border: `1px solid ${errors.name ? '#DC2626' : '#E2E8F0'}` }}
+              style={{ ...input, border: `1px solid ${errors.name ? '#c0392b' : '#dbe3ed'}` }}
+              value={form.name}
+              onChange={(e) => setField('name', e.target.value)}
+              placeholder="e.g. Priya Sharma"
             />
-            {errors.name && <div style={{ color: '#DC2626', fontSize: 12, marginTop: 4 }}>{errors.name}</div>}
-          </div>
+            {errors.name && <FieldError text={errors.name} />}
+          </Field>
 
-          {/* Email */}
-          <div style={{ marginBottom: 16 }}>
-            <label style={labelStyle}>Email *</label>
-            <input
-              type="email"
-              value={formData.email}
-              onChange={e => handleInputChange('email', e.target.value)}
-              style={{ ...inputStyle, border: `1px solid ${errors.email ? '#DC2626' : '#E2E8F0'}` }}
-            />
-            {errors.email && <div style={{ color: '#DC2626', fontSize: 12, marginTop: 4 }}>{errors.email}</div>}
-          </div>
-
-          {/* Role */}
-          <div style={{ marginBottom: 16 }}>
-            <label style={labelStyle}>Role *</label>
-            <select
-              value={formData.role}
-              onChange={e => handleInputChange('role', e.target.value)}
-              style={{ ...inputStyle, border: `1px solid ${errors.role ? '#DC2626' : '#E2E8F0'}`, background: '#fff' }}
-            >
-              <option value="">Select Role</option>
-              <option value="trainee">Trainee</option>
-              <option value="trainer">Trainer</option>
-              <option value="hr">HR</option>
-            </select>
-            {errors.role && <div style={{ color: '#DC2626', fontSize: 12, marginTop: 4 }}>{errors.role}</div>}
-          </div>
-
-          {/* Batch Multiselect */}
-          <div style={{ marginBottom: 16 }} ref={dropdownRef}>
-            <label style={labelStyle}>Batches</label>
-
-            {/* Selected tags */}
-            {selectedBatches.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-                {selectedBatches.map(batch => (
-                  <span key={batch._id} style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 4,
-                    padding: '3px 8px',
-                    background: '#EEF2FF', color: '#3730A3',
-                    border: '1px solid #C7D2FE',
-                    borderRadius: 20, fontSize: 12, fontWeight: 500
-                  }}>
-                    {batch.name}
-                    <span
-                      onClick={() => removeBatch(batch._id)}
-                      style={{ cursor: 'pointer', fontWeight: 700, fontSize: 14, lineHeight: 1, color: '#6366F1' }}
-                    >×</span>
-                  </span>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 14 }}>
+            <Field label="Email">
+              <input
+                style={{ ...input, border: `1px solid ${errors.email ? '#c0392b' : '#dbe3ed'}` }}
+                value={form.email}
+                onChange={(e) => setField('email', e.target.value)}
+                placeholder="name@example.com"
+              />
+              {errors.email && <FieldError text={errors.email} />}
+            </Field>
+            <Field label="Role">
+              <select
+                style={{ ...input, border: `1px solid ${errors.role ? '#c0392b' : '#dbe3ed'}` }}
+                value={form.role}
+                onChange={(e) => setField('role', e.target.value)}
+              >
+                {ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {r.charAt(0).toUpperCase() + r.slice(1)}
+                  </option>
                 ))}
-              </div>
-            )}
-
-            {/* Dropdown trigger */}
-            <div
-              onClick={() => setBatchDropdownOpen(prev => !prev)}
-              style={{
-                ...inputStyle,
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                cursor: 'pointer', userSelect: 'none',
-                color: selectedBatches.length === 0 ? '#94A3B8' : '#1E293B',
-                background: '#fff'
-              }}
-            >
-              <span>{selectedBatches.length === 0 ? 'Select batches...' : `${selectedBatches.length} batch${selectedBatches.length > 1 ? 'es' : ''} selected`}</span>
-              <span style={{ fontSize: 10, color: '#64748B' }}>{batchDropdownOpen ? '▲' : '▼'}</span>
-            </div>
-
-            {/* Dropdown list */}
-            {batchDropdownOpen && (
-              <div style={{
-                position: 'absolute',
-                background: '#fff',
-                border: '1px solid #E2E8F0',
-                borderRadius: 8,
-                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                zIndex: 1100,
-                width: isMobile ? 'calc(100% - 72px)' : '452px',
-                maxHeight: 200,
-                overflowY: 'auto',
-                marginTop: 4
-              }}>
-                {batches?.length === 0 && (
-                  <div style={{ padding: '12px 16px', color: '#94A3B8', fontSize: 13 }}>No batches available</div>
-                )}
-                {batches?.map(batch => {
-                  const isSelected = formData.batchIds.includes(batch._id);
-                  return (
-                    <div
-                      key={batch._id}
-                      onClick={() => toggleBatch(batch._id)}
-                      style={{
-                        padding: '10px 14px',
-                        cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', gap: 10,
-                        background: isSelected ? '#EEF2FF' : '#fff',
-                        borderBottom: '1px solid #F1F5F9',
-                        fontSize: 14,
-                        color: isSelected ? '#3730A3' : '#1E293B',
-                        transition: 'background 0.15s'
-                      }}
-                      onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#F8FAFC'; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = isSelected ? '#EEF2FF' : '#fff'; }}
-                    >
-                      {/* Checkbox */}
-                      <div style={{
-                        width: 16, height: 16, borderRadius: 4, flexShrink: 0,
-                        border: `2px solid ${isSelected ? '#4F46E5' : '#CBD5E1'}`,
-                        background: isSelected ? '#4F46E5' : '#fff',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center'
-                      }}>
-                        {isSelected && <span style={{ color: '#fff', fontSize: 10, fontWeight: 700 }}>✓</span>}
-                      </div>
-                      {batch.name}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+              </select>
+              {errors.role && <FieldError text={errors.role} />}
+            </Field>
           </div>
 
-          {/* Password (create only) */}
+          <Field label={`Batches (${selectedBatches.length} selected)`}>
+            <div ref={dropdownRef} style={{ position: 'relative' }}>
+              {selectedBatches.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                  {selectedBatches.map((b) => (
+                    <span key={b._id} style={tagPill}>
+                      {b.name}
+                      <span onClick={() => removeBatch(b._id)} style={tagPillClose}>
+                        ×
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <div
+                onClick={() => setBatchDropdownOpen((v) => !v)}
+                style={{
+                  ...input,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                  color: selectedBatches.length === 0 ? '#94A3B8' : '#172033',
+                }}
+              >
+                <span>
+                  {selectedBatches.length === 0
+                    ? 'Select batches…'
+                    : `${selectedBatches.length} batch${selectedBatches.length > 1 ? 'es' : ''} selected`}
+                </span>
+                <span style={{ fontSize: 10, color: '#657691' }}>{batchDropdownOpen ? '▲' : '▼'}</span>
+              </div>
+
+              {batchDropdownOpen && (
+                <div style={batchDropdown}>
+                  {(!batches || batches.length === 0) && (
+                    <div style={{ padding: '12px 14px', color: '#94A3B8', fontSize: 13 }}>No batches available</div>
+                  )}
+                  {batches?.map((b) => {
+                    const isSelected = form.batchIds.includes(b._id);
+                    return (
+                      <div key={b._id} onClick={() => toggleBatch(b._id)} style={batchOption(isSelected)}>
+                        <span style={checkbox(isSelected)}>{isSelected && '✓'}</span>
+                        {b.name}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </Field>
+
           {!user && (
-            <div style={{ marginBottom: 16 }}>
-              <label style={labelStyle}>Password *</label>
+            <Field label="Password">
               <input
                 type="password"
-                value={formData.password}
-                onChange={e => handleInputChange('password', e.target.value)}
-                style={{ ...inputStyle, border: `1px solid ${errors.password ? '#DC2626' : '#E2E8F0'}` }}
+                style={{ ...input, border: `1px solid ${errors.password ? '#c0392b' : '#dbe3ed'}` }}
+                value={form.password}
+                onChange={(e) => setField('password', e.target.value)}
+                placeholder="Minimum 6 characters"
               />
-              {errors.password && <div style={{ color: '#DC2626', fontSize: 12, marginTop: 4 }}>{errors.password}</div>}
-            </div>
+              {errors.password && <FieldError text={errors.password} />}
+            </Field>
           )}
+        </div>
 
-          {/* Actions */}
-          <div style={{
-            display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 24,
-            flexDirection: isMobile ? 'column' : 'row'
-          }}>
-            <button type="button" onClick={onClose} disabled={loading} style={{
-              padding: isMobile ? '12px 20px' : '10px 20px',
-              background: 'transparent', color: '#64748B',
-              border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.5 : 1,
-              width: isMobile ? '100%' : 'auto'
-            }}>
-              Cancel
-            </button>
-            <button type="submit" disabled={loading} style={{
-              padding: isMobile ? '12px 20px' : '10px 20px',
-              background: loading ? '#94A3B8' : '#1E40AF',
-              color: '#fff', border: 'none', borderRadius: 8,
-              fontSize: 14, fontWeight: 600,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center',
-              width: isMobile ? '100%' : 'auto'
-            }}>
-              {loading && (
-                <div style={{
-                  width: 16, height: 16,
-                  border: '2px solid transparent', borderTop: '2px solid #fff',
-                  borderRadius: '50%', animation: 'spin 1s linear infinite'
-                }} />
-              )}
-              {loading ? 'Saving...' : (user ? 'Update' : 'Create')} User
-            </button>
-          </div>
-        </form>
+        <div style={dialogFoot}>
+          <button onClick={onClose} disabled={saving} style={btnGhost}>
+            Cancel
+          </button>
+          <button onClick={handleSave} disabled={saving} style={btnPrimary}>
+            {saving ? 'Saving…' : user ? 'Update user' : 'Create user'}
+          </button>
+        </div>
       </div>
     </div>
   );
-};
+}
 
-export default UserManagement;
+// ── Small presentational bits ──────────────────────────────────────────────────
+function Field({ label, children }) {
+  return (
+    <label style={{ display: 'block' }}>
+      <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#657691', marginBottom: 6 }}>
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+function FieldError({ text }) {
+  return <div style={{ color: '#c0392b', fontSize: 12, marginTop: 4 }}>{text}</div>;
+}
+
+// ── Styles (tokens lifted directly from AdminSessions.jsx) ─────────────────────
+const th = { padding: '12px 16px', textAlign: 'left', fontSize: 12, letterSpacing: '.7px', textTransform: 'uppercase', whiteSpace: 'nowrap' };
+const td = { padding: '11px 16px', fontSize: 13, color: '#2b3648' };
+const emptyCell = { padding: 32, textAlign: 'center', color: '#657691' };
+
+const card = { background: '#fff', border: '1px solid #dbe3ed', borderRadius: 12, padding: 14, boxShadow: '0 1px 2px rgba(23,32,51,.06)' };
+const cardEmpty = { background: '#fff', border: '1px solid #dbe3ed', borderRadius: 12, padding: 28, textAlign: 'center', color: '#657691' };
+const cardMeta = { fontSize: 13, color: '#41506a', marginTop: 6 };
+
+const badge = (bg) => ({ background: bg, color: '#fff', padding: '3px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' });
+
+const programPill = { padding: '4px 8px', borderRadius: 8, fontSize: 11, fontWeight: 600, background: '#EEF2FF', color: '#3730A3', border: '1px solid #C7D2FE' };
+const batchPill = { padding: '4px 8px', borderRadius: 8, fontSize: 11, fontWeight: 500, background: '#F0F9FF', color: '#0369A1', border: '1px solid #BAE6FD' };
+
+const btnPrimary = { background: '#2f6f9b', color: '#fff', border: 'none', padding: '9px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' };
+const btnGhost = { background: '#fff', color: '#41506a', border: '1px solid #dbe3ed', padding: '9px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' };
+
+const btnSchedule = (mobile) => ({
+  background: 'linear-gradient(180deg,#3a86c0,#2f6f9b)',
+  color: '#fff',
+  border: 'none',
+  padding: '11px 22px',
+  borderRadius: 10,
+  fontSize: 14,
+  fontWeight: 800,
+  letterSpacing: '.2px',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  boxShadow: '0 6px 16px rgba(47,111,155,.32)',
+  minWidth: mobile ? 0 : 170,
+  flex: mobile ? 1 : '0 0 auto',
+  whiteSpace: 'nowrap',
+});
+
+const input = { width: '100%', boxSizing: 'border-box', padding: '9px 11px', borderRadius: 8, border: '1px solid #dbe3ed', fontSize: 13, fontFamily: 'inherit', color: '#172033', background: '#fff' };
+
+const filterBar = (mobile) => ({
+  display: 'grid',
+  gridTemplateColumns: mobile ? '1fr' : 'minmax(220px,1.6fr) 1fr 1fr auto',
+  gap: 10,
+  marginBottom: 16,
+  alignItems: 'center',
+});
+
+const tagPill = { display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: '#EEF2FF', color: '#3730A3', border: '1px solid #C7D2FE', borderRadius: 20, fontSize: 12, fontWeight: 500 };
+const tagPillClose = { cursor: 'pointer', fontWeight: 700, fontSize: 14, lineHeight: 1, color: '#6366F1' };
+
+const batchDropdown = { position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #dbe3ed', borderRadius: 8, boxShadow: '0 8px 24px rgba(15,23,42,.12)', zIndex: 1100, maxHeight: 200, overflowY: 'auto', marginTop: 4 };
+const batchOption = (selected) => ({ padding: '10px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, background: selected ? '#eaf3fb' : '#fff', borderBottom: '1px solid #f1f5f9', fontSize: 13.5, color: selected ? '#2f6f9b' : '#172033' });
+const checkbox = (selected) => ({ width: 16, height: 16, borderRadius: 4, flexShrink: 0, border: `2px solid ${selected ? '#2f6f9b' : '#CBD5E1'}`, background: selected ? '#2f6f9b' : '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 10, fontWeight: 700 });
+
+const overlay = { position: 'fixed', inset: 0, background: 'rgba(15,23,42,.45)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', zIndex: 1000 };
+const dialog = { background: '#fff', borderRadius: 14, width: '100%', boxShadow: '0 20px 60px rgba(15,23,42,.3)', marginTop: 24 };
+const dialogHead = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px', borderBottom: '1px solid #eef2f7' };
+const dialogFoot = { display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '16px 20px', borderTop: '1px solid #eef2f7' };
+
+const bannerClose = { background: 'transparent', border: 'none', fontSize: 20, lineHeight: 1, cursor: 'pointer', color: 'inherit' };
+
+const pagerWrap = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginTop: 16 };
+const pagerInfo = { fontSize: 12.5, color: '#657691' };
+const pagerBtns = { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' };
+const pgBtn = (disabled) => ({ background: '#fff', color: disabled ? '#b6c0cf' : '#41506a', border: '1px solid #dbe3ed', padding: '6px 10px', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: 'inherit' });
+const pgNum = (active) => ({ background: active ? '#2f6f9b' : '#fff', color: active ? '#fff' : '#41506a', border: `1px solid ${active ? '#2f6f9b' : '#dbe3ed'}`, padding: '6px 11px', borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: 'pointer', minWidth: 36, fontFamily: 'inherit' });
+const pgEllipsis = { color: '#9aa6b6', padding: '0 2px' };
+
+const toastWrap = { position: 'fixed', top: 16, right: 16, display: 'grid', gap: 8, zIndex: 2000 };
+const toastItem = (border) => ({ display: 'flex', alignItems: 'center', gap: 10, minWidth: 220, maxWidth: 360, padding: '11px 14px', borderRadius: 10, background: '#fff', boxShadow: '0 10px 30px rgba(15,23,42,.18)', border: `1px solid ${border}`, fontSize: 13.5, color: '#172033' });
