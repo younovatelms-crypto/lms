@@ -1,459 +1,4 @@
-// import React, { useEffect, useRef, useState } from 'react';
-// import { useAppDispatch, useAppSelector } from '../../app/hooks';
-// import {
-//   fetchAdminTrainees,
-//   fetchBatches,
-//   assignTraineesToBatch,
-//   selectAllAdminTrainees,
-//   selectAllBatches,
-//   selectAdminStatus,
-//   selectAdminError,
-// } from '../../features/admin/adminSlice';
-
-// const Trainees = () => {
-//   const dispatch = useAppDispatch();
-//   const isMobile = window.innerWidth <= 768;
-
-//   // Defensive defaults so a null/undefined slice never breaks the table.
-//   const trainees = useAppSelector(selectAllAdminTrainees) ?? [];
-//   const batches  = useAppSelector(selectAllBatches) ?? [];
-//   const status   = useAppSelector(selectAdminStatus);
-//   const error    = useAppSelector(selectAdminError);
-
-//   // Per-trainee batch modal
-//   const [batchModalTrainee, setBatchModalTrainee] = useState(null); // the trainee being edited
-//   const [chosenBatchIds, setChosenBatchIds]       = useState([]);   // batches to add
-//   const [pickerOpen, setPickerOpen]               = useState(false);// dropdown open/close
-//   const [assigning, setAssigning]                 = useState(false);
-//   const pickerRef = useRef(null);
-
-//   // Lightweight toast
-//   const [toast, setToast] = useState('');
-
-//   // Pagination
-//   const [page, setPage]               = useState(1);
-//   const [rowsPerPage, setRowsPerPage] = useState(10);
-
-//   // ─────────────────────────────────────────────────────────────────────────
-//   // HELPERS (plain functions — safe to define anywhere)
-//   // ─────────────────────────────────────────────────────────────────────────
-
-//   // Set of batch-id strings a trainee currently belongs to.
-//   // Handles batchIds being raw ids OR populated { _id } objects.
-//   const currentBatchIdSet = (trainee) => {
-//     const raw = trainee?.batchIds || [];
-//     return new Set(raw.map((b) => String(b?._id || b)));
-//   };
-
-//   // [{ id, name }] for the batches a trainee is in (joined against the batches list).
-//   const getTraineeBatches = (trainee) => {
-//     const set = currentBatchIdSet(trainee);
-//     return batches
-//       .filter((b) => set.has(String(b._id)))
-//       .map((b) => ({ id: String(b._id), name: b.name }));
-//   };
-
-//   const openBatchModal = (trainee) => {
-//     setBatchModalTrainee(trainee);
-//     setChosenBatchIds([]);
-//     setPickerOpen(false);
-//   };
-
-//   const closeBatchModal = () => {
-//     setBatchModalTrainee(null);
-//     setChosenBatchIds([]);
-//     setPickerOpen(false);
-//   };
-
-//   const toggleChosen = (id) => {
-//     const key = String(id);
-//     setChosenBatchIds((prev) =>
-//       prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]
-//     );
-//   };
-
-//   const showToast = (msg) => {
-//     setToast(msg);
-//     window.clearTimeout(showToast._t);
-//     showToast._t = window.setTimeout(() => setToast(''), 3000);
-//   };
-
-//   // ─────────────────────────────────────────────────────────────────────────
-//   // ALL HOOKS MUST RUN BEFORE ANY CONDITIONAL RETURN (Rules of Hooks).
-//   // ─────────────────────────────────────────────────────────────────────────
-
-//   useEffect(() => {
-//     dispatch(fetchAdminTrainees());
-//     dispatch(fetchBatches());
-//   }, [dispatch]);
-
-//   useEffect(() => {
-//     setPage((p) => Math.min(p, Math.max(1, Math.ceil((trainees.length || 0) / rowsPerPage))));
-//   }, [trainees.length, rowsPerPage]);
-
-//   // Close the batch picker when clicking outside it.
-//   useEffect(() => {
-//     if (!pickerOpen) return undefined;
-//     const onDocClick = (e) => {
-//       if (pickerRef.current && !pickerRef.current.contains(e.target)) {
-//         setPickerOpen(false);
-//       }
-//     };
-//     document.addEventListener('mousedown', onDocClick);
-//     return () => document.removeEventListener('mousedown', onDocClick);
-//   }, [pickerOpen]);
-
-//   const handleSaveBatches = async () => {
-//     if (!batchModalTrainee || chosenBatchIds.length === 0) return;
-
-//     setAssigning(true);
-//     try {
-//       // $addToSet on the backend → assign each chosen batch to this single trainee.
-//       await Promise.all(
-//         chosenBatchIds.map((batchId) =>
-//           dispatch(
-//             assignTraineesToBatch({ batchId, traineeIds: [batchModalTrainee._id] })
-//           ).unwrap()
-//         )
-//       );
-
-//       await dispatch(fetchAdminTrainees());
-
-//       showToast(
-//         `${batchModalTrainee.name} added to ${chosenBatchIds.length} batch${chosenBatchIds.length > 1 ? 'es' : ''}`
-//       );
-//       closeBatchModal();
-//     } catch (err) {
-//       alert(err || 'Failed to assign batches');
-//     } finally {
-//       setAssigning(false);
-//     }
-//   };
-
-//   // ─────────────────────────────────────────────────────────────────────────
-//   // EARLY RETURNS (after all hooks)
-//   // ─────────────────────────────────────────────────────────────────────────
-
-//   if (status === 'loading') {
-//     return (
-//       <div style={{ padding: isMobile ? '16px 20px' : '32px 36px', fontFamily: 'Inter, system-ui, sans-serif', background: '#F8FAFC', minHeight: '100vh' }}>
-//         <div style={{ height: 28, width: 220, marginBottom: 8, background: 'linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%)', borderRadius: 8 }} />
-//         <div style={{ height: 14, width: 300, marginBottom: 28, background: 'linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%)', borderRadius: 8 }} />
-//         <div style={{ height: 400, background: 'linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%)', borderRadius: 16 }} />
-//       </div>
-//     );
-//   }
-
-//   if (status === 'failed') {
-//     return (
-//       <div style={{ padding: isMobile ? '16px 20px' : '32px 36px', fontFamily: 'Inter, system-ui, sans-serif', background: '#F8FAFC', minHeight: '100vh' }}>
-//         <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12, padding: 20 }}>
-//           <p style={{ color: '#B91C1C', fontWeight: 600, margin: '0 0 4px' }}>Error loading trainees</p>
-//           <p style={{ color: '#B91C1C', fontSize: 13, margin: 0 }}>{error}</p>
-//         </div>
-//       </div>
-//     );
-//   }
-
-//   // ─────────────────────────────────────────────────────────────────────────
-//   // DERIVED PAGINATION VALUES (declared ONCE, after the early returns)
-//   // ─────────────────────────────────────────────────────────────────────────
-
-//   const totalTrainees = trainees.length;
-//   const totalPages = Math.max(1, Math.ceil(totalTrainees / rowsPerPage));
-//   const safePage = Math.min(page, totalPages);
-//   const startIdx = (safePage - 1) * rowsPerPage;
-//   const endIdx = startIdx + rowsPerPage;
-//   const paginatedTrainees = trainees.slice(startIdx, endIdx);
-
-//   // For the open modal: which batches are still addable (not already assigned).
-//   const currentSet      = batchModalTrainee ? currentBatchIdSet(batchModalTrainee) : new Set();
-//   const currentBatches  = batchModalTrainee ? getTraineeBatches(batchModalTrainee) : [];
-//   const addableBatches  = batches.filter((b) => !currentSet.has(String(b._id)));
-
-//   const thStyle = {
-//     padding: isMobile ? '8px 12px' : '12px 16px',
-//     textAlign: 'left',
-//     fontSize: isMobile ? 10 : 11,
-//     fontWeight: 700,
-//     color: '#64748B',
-//     letterSpacing: '0.7px',
-//     textTransform: 'uppercase',
-//     borderBottom: '1px solid #E2E8F0',
-//   };
-
-//   return (
-//     <div style={{ padding: isMobile ? '16px 20px' : '32px 36px', fontFamily: 'Inter, system-ui, sans-serif', background: '#F8FAFC', minHeight: '100vh' }}>
-//       <div style={{ marginBottom: isMobile ? 20 : 28 }}>
-//         <h1 style={{ fontSize: isMobile ? 22 : 28, fontWeight: 800, marginBottom: 6, color: '#0F172A', letterSpacing: '-0.5px' }}>
-//           Trainees ({trainees.length})
-//         </h1>
-//         <p style={{ margin: 0, color: '#64748B', fontSize: isMobile ? 13 : 14, fontWeight: 500 }}>
-//           Manage trainee profiles and assign them to one or more batches.
-//         </p>
-//       </div>
-
-//       {trainees.length === 0 ? (
-//         <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: 16, padding: isMobile ? 32 : 48, textAlign: 'center', boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 8px 24px rgba(30,58,95,0.08)' }}>
-//           <p style={{ color: '#64748B', fontSize: isMobile ? 13 : 14, margin: 0 }}>No trainees found.</p>
-//         </div>
-//       ) : (
-//         <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: 16, boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 8px 24px rgba(30,58,95,0.08)', overflow: 'hidden' }}>
-//           <div style={{ overflowX: 'auto', maxHeight: isMobile ? '320px' : '460px', overflowY: 'auto' }}>
-//             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: isMobile ? '620px' : '760px' }}>
-//               <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
-//                 <tr style={{ background: '#F8FAFC' }}>
-//                   <th style={thStyle}>#</th>
-//                   <th style={thStyle}>Name</th>
-//                   <th style={{ ...thStyle, display: isMobile && window.innerWidth <= 480 ? 'none' : 'table-cell' }}>Email</th>
-//                   <th style={{ ...thStyle, display: window.innerWidth <= 600 ? 'none' : 'table-cell' }}>Batches</th>
-//                   <th style={thStyle}>Status</th>
-//                   <th style={{ ...thStyle, textAlign: 'right' }}>Actions</th>
-//                 </tr>
-//               </thead>
-
-//               <tbody>
-//                 {paginatedTrainees.map((trainee, idx) => {
-//                   const traineeBatches = getTraineeBatches(trainee);
-//                   return (
-//                     <tr key={trainee._id || idx} style={{ borderBottom: '1px solid #E2E8F0' }}>
-//                       <td style={{ padding: isMobile ? '8px 12px' : '12px 16px', fontSize: isMobile ? 12 : 13, color: '#64748B' }}>
-//                         {startIdx + idx + 1}
-//                       </td>
-//                       <td style={{ padding: isMobile ? '8px 12px' : '12px 16px', fontSize: isMobile ? 12 : 13, color: '#0F172A', fontWeight: 600 }}>
-//                         <div style={{ maxWidth: isMobile ? '120px' : 'none', overflow: isMobile ? 'hidden' : 'visible', textOverflow: isMobile ? 'ellipsis' : 'clip', whiteSpace: isMobile ? 'nowrap' : 'normal' }}>
-//                           {trainee.name || '—'}
-//                         </div>
-//                       </td>
-//                       <td style={{ padding: isMobile ? '8px 12px' : '12px 16px', fontSize: isMobile ? 12 : 13, color: '#64748B', display: window.innerWidth <= 480 ? 'none' : 'table-cell' }}>
-//                         <div style={{ maxWidth: isMobile ? '150px' : 'none', overflow: isMobile ? 'hidden' : 'visible', textOverflow: isMobile ? 'ellipsis' : 'clip', whiteSpace: isMobile ? 'nowrap' : 'normal' }}>
-//                           {trainee.email || '—'}
-//                         </div>
-//                       </td>
-
-//                       {/* ── BATCHES — one pill per batch ── */}
-//                       <td style={{ padding: isMobile ? '8px 12px' : '12px 16px', fontSize: isMobile ? 12 : 13, color: '#64748B', display: window.innerWidth <= 600 ? 'none' : 'table-cell' }}>
-//                         {traineeBatches.length > 0 ? (
-//                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxWidth: 260 }}>
-//                             {traineeBatches.map((b) => (
-//                               <span key={b.id} style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, background: '#DBEAFE', color: '#1E40AF', whiteSpace: 'nowrap' }}>
-//                                 {b.name}
-//                               </span>
-//                             ))}
-//                           </div>
-//                         ) : (
-//                           <span style={{ color: '#94A3B8', fontSize: '12px' }}>Not Assigned</span>
-//                         )}
-//                       </td>
-
-//                       <td style={{ padding: isMobile ? '8px 12px' : '12px 16px' }}>
-//                         <span style={{ display: 'inline-flex', alignItems: 'center', padding: isMobile ? '2px 8px' : '3px 10px', borderRadius: 999, fontSize: isMobile ? 10 : 11, fontWeight: 700, background: trainee.isActive ? '#DCFCE7' : '#F1F5F9', color: trainee.isActive ? '#15803D' : '#475569' }}>
-//                           {trainee.isActive ? 'Active' : 'In-Active'}
-//                         </span>
-//                       </td>
-
-//                       {/* ── ACTIONS — open the per-trainee batch picker ── */}
-//                       <td style={{ padding: isMobile ? '8px 12px' : '12px 16px', textAlign: 'right' }}>
-//                         <button
-//                           onClick={() => openBatchModal(trainee)}
-//                           style={{ padding: isMobile ? '6px 10px' : '7px 14px', borderRadius: 8, border: '1px solid #3B82F6', background: '#EFF6FF', color: '#1D4ED8', fontSize: isMobile ? 12 : 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
-//                         >
-//                           Manage Batches
-//                         </button>
-//                       </td>
-//                     </tr>
-//                   );
-//                 })}
-//               </tbody>
-//             </table>
-//           </div>
-
-//           {/* Paginator */}
-//           <div style={{ padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, borderTop: '1px solid #E2E8F0', background: '#fff', flexWrap: 'wrap' }}>
-//             <div style={{ color: '#64748B', fontSize: 13, fontWeight: 600 }}>
-//               Page <span style={{ color: '#0F172A' }}>{safePage}</span> of <span style={{ color: '#0F172A' }}>{totalPages}</span>
-//               <span style={{ fontWeight: 500 }}> · {totalTrainees} total</span>
-//             </div>
-
-//             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-//               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-//                 <span style={{ color: '#64748B', fontSize: 13, fontWeight: 600 }}>Rows:</span>
-//                 <select
-//                   value={rowsPerPage}
-//                   onChange={(e) => { setRowsPerPage(Number(e.target.value)); setPage(1); }}
-//                   style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #D1D5DB', background: 'white', fontWeight: 700, color: '#0F172A' }}
-//                 >
-//                   {[5, 10, 15, 20].map((n) => (<option key={n} value={n}>{n}</option>))}
-//                 </select>
-//               </div>
-
-//               <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}
-//                 style={{ padding: '8px 12px', background: safePage <= 1 ? '#F8FAFC' : '#fff', color: safePage <= 1 ? '#94A3B8' : '#475569', border: '1px solid #E2E8F0', borderRadius: '6px', fontSize: '14px', cursor: safePage <= 1 ? 'not-allowed' : 'pointer', transition: 'all 0.2s' }}>
-//                 ← Previous
-//               </button>
-
-//               {Array.from({ length: totalPages }, (_, i) => i + 1)
-//                 .filter((p) => { const distance = Math.abs(p - safePage); return distance <= 2 || p === 1 || p === totalPages; })
-//                 .map((p, i, arr) => {
-//                   const prevPage = arr[i - 1];
-//                   const showEllipsis = prevPage && p - prevPage > 1;
-//                   return (
-//                     <React.Fragment key={p}>
-//                       {showEllipsis && <span style={{ padding: '8px 4px', color: '#94A3B8' }}>...</span>}
-//                       <button onClick={() => setPage(p)}
-//                         style={{ padding: '8px 12px', background: safePage === p ? '#3B82F6' : '#fff', color: safePage === p ? '#fff' : '#475569', border: `1px solid ${safePage === p ? '#3B82F6' : '#E2E8F0'}`, borderRadius: '6px', fontSize: '14px', fontWeight: safePage === p ? '600' : '400', cursor: 'pointer', minWidth: '40px', transition: 'all 0.2s' }}>
-//                         {p}
-//                       </button>
-//                     </React.Fragment>
-//                   );
-//                 })}
-
-//               <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}
-//                 style={{ padding: '8px 12px', background: safePage >= totalPages ? '#F8FAFC' : '#fff', color: safePage >= totalPages ? '#94A3B8' : '#475569', border: '1px solid #E2E8F0', borderRadius: '6px', fontSize: '14px', cursor: safePage >= totalPages ? 'not-allowed' : 'pointer', transition: 'all 0.2s' }}>
-//                 Next →
-//               </button>
-//             </div>
-//           </div>
-//         </div>
-//       )}
-
-//       {/* ── PER-TRAINEE BATCH MODAL with multi-select dropdown ── */}
-//       {batchModalTrainee && (
-//         <div
-//           style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}
-//           onClick={closeBatchModal}
-//         >
-//           <div
-//             onClick={(e) => e.stopPropagation()}
-//             style={{ backgroundColor: 'white', borderRadius: 16, padding: isMobile ? '20px 18px' : 24, width: '100%', maxWidth: 500, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)' }}
-//           >
-//             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-//               <h2 style={{ fontSize: isMobile ? 18 : 20, fontWeight: 700, color: '#0F172A', margin: 0 }}>
-//                 Manage Batches
-//               </h2>
-//               <button onClick={closeBatchModal} style={{ background: 'none', border: 'none', fontSize: 20, lineHeight: 1, cursor: 'pointer', color: '#9CA3AF', padding: 4 }}>✕</button>
-//             </div>
-//             <p style={{ color: '#64748B', fontSize: 14, marginBottom: 18 }}>
-//               {batchModalTrainee.name} — <span style={{ color: '#94A3B8' }}>{batchModalTrainee.email}</span>
-//             </p>
-
-//             {/* Current batches */}
-//             <div style={{ marginBottom: 18 }}>
-//               <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 8 }}>
-//                 Currently in
-//               </label>
-//               {currentBatches.length > 0 ? (
-//                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-//                   {currentBatches.map((b) => (
-//                     <span key={b.id} style={{ padding: '3px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600, background: '#DBEAFE', color: '#1E40AF' }}>
-//                       {b.name}
-//                     </span>
-//                   ))}
-//                 </div>
-//               ) : (
-//                 <span style={{ color: '#94A3B8', fontSize: 13 }}>Not assigned to any batch yet.</span>
-//               )}
-//             </div>
-
-//             {/* Multi-select dropdown */}
-//             <div style={{ marginBottom: 22 }}>
-//               <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 8 }}>
-//                 Add to batches
-//               </label>
-
-//               {addableBatches.length === 0 ? (
-//                 <p style={{ fontSize: 13, color: '#94A3B8', margin: 0 }}>
-//                   This trainee is already in every batch.
-//                 </p>
-//               ) : (
-//                 <div ref={pickerRef} style={{ position: 'relative' }}>
-//                   <button
-//                     type="button"
-//                     onClick={() => setPickerOpen((o) => !o)}
-//                     style={{ width: '100%', padding: '11px 14px', borderRadius: 8, border: '1px solid #D1D5DB', background: 'white', fontSize: 14, color: chosenBatchIds.length ? '#0F172A' : '#9CA3AF', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'left' }}
-//                   >
-//                     <span>
-//                       {chosenBatchIds.length === 0
-//                         ? 'Select batches…'
-//                         : `${chosenBatchIds.length} batch${chosenBatchIds.length > 1 ? 'es' : ''} selected`}
-//                     </span>
-//                     <span style={{ color: '#9CA3AF', transform: pickerOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}>▾</span>
-//                   </button>
-
-//                   {pickerOpen && (
-//                     <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, boxShadow: '0 12px 28px rgba(15,23,42,0.12)', maxHeight: 240, overflowY: 'auto', zIndex: 20, padding: 6 }}>
-//                       {addableBatches.map((batch) => {
-//                         const checked = chosenBatchIds.includes(String(batch._id));
-//                         return (
-//                           <label
-//                             key={batch._id}
-//                             style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 8, cursor: 'pointer', background: checked ? '#EFF6FF' : 'transparent', fontSize: 14, color: '#0F172A' }}
-//                           >
-//                             <input
-//                               type="checkbox"
-//                               checked={checked}
-//                               onChange={() => toggleChosen(String(batch._id))}
-//                               style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#3B82F6' }}
-//                             />
-//                             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{batch.name}</span>
-//                           </label>
-//                         );
-//                       })}
-//                     </div>
-//                   )}
-//                 </div>
-//               )}
-
-//               {/* Chosen-to-add preview pills */}
-//               {chosenBatchIds.length > 0 && (
-//                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
-//                   {chosenBatchIds.map((id) => {
-//                     const b = batches.find((x) => String(x._id) === String(id));
-//                     return (
-//                       <span key={id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 8px 3px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600, background: '#DCFCE7', color: '#15803D' }}>
-//                         {b ? b.name : id}
-//                         <button onClick={() => toggleChosen(id)} style={{ background: 'none', border: 'none', color: '#15803D', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: 0 }}>✕</button>
-//                       </span>
-//                     );
-//                   })}
-//                 </div>
-//               )}
-//             </div>
-
-//             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-//               <button
-//                 onClick={closeBatchModal}
-//                 disabled={assigning}
-//                 style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid #D1D5DB', backgroundColor: 'white', color: '#374151', fontSize: 14, fontWeight: 600, cursor: assigning ? 'not-allowed' : 'pointer', opacity: assigning ? 0.5 : 1 }}
-//               >
-//                 Cancel
-//               </button>
-//               <button
-//                 onClick={handleSaveBatches}
-//                 disabled={assigning || chosenBatchIds.length === 0}
-//                 style={{ padding: '10px 20px', borderRadius: 8, border: 'none', backgroundColor: '#3B82F6', color: 'white', fontSize: 14, fontWeight: 600, cursor: (assigning || chosenBatchIds.length === 0) ? 'not-allowed' : 'pointer', opacity: (assigning || chosenBatchIds.length === 0) ? 0.5 : 1 }}
-//               >
-//                 {assigning
-//                   ? 'Saving…'
-//                   : `Add to ${chosenBatchIds.length || ''} batch${chosenBatchIds.length === 1 ? '' : 'es'}`.trim()}
-//               </button>
-//             </div>
-//           </div>
-//         </div>
-//       )}
-
-//       {/* ── TOAST ── */}
-//       {toast && (
-//         <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: '#0F172A', color: '#fff', padding: '12px 18px', borderRadius: 10, fontSize: 14, fontWeight: 600, boxShadow: '0 10px 30px rgba(15,23,42,0.25)', zIndex: 2000 }}>
-//           {toast}
-//         </div>
-//       )}
-//     </div>
-//   );
-// };
-
-// export default Trainees;
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import {
   fetchAdminTrainees,
@@ -465,14 +10,67 @@ import {
   selectAdminError,
 } from '../../features/admin/adminSlice';
 
-const Trainees = () => {
+// Toast look-up (icon glyph + colours) — identical to Sessions/Users.
+const TOAST = {
+  success: { color: '#16a05f', border: '#bfe6d0', glyph: '✓' },
+  error: { color: '#c0392b', border: '#f3c2bd', glyph: '✕' },
+  warning: { color: '#b06f00', border: '#f0d9a8', glyph: '⚠' },
+  info: { color: '#2f6f9b', border: '#bcd6ea', glyph: 'ℹ' },
+};
+
+// ── Windowed page list: [1, '…', 4, 5, 6, '…', 20] ─────────────────────────────
+function pageList(cur, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const set = new Set([1, 2, total - 1, total, cur - 1, cur, cur + 1]);
+  const nums = [...set].filter((n) => n >= 1 && n <= total).sort((a, b) => a - b);
+  const out = [];
+  let prev = 0;
+  for (const n of nums) {
+    if (prev && n - prev > 1) out.push('…');
+    out.push(n);
+    prev = n;
+  }
+  return out;
+}
+
+// ── Tiny responsive hook (re-renders on resize) ────────────────────────────────
+function useIsMobile(bp = 720) {
+  const get = () =>
+    typeof window !== 'undefined' && window.matchMedia(`(max-width:${bp}px)`).matches;
+  const [mobile, setMobile] = useState(get);
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width:${bp}px)`);
+    const onChange = (e) => setMobile(e.matches);
+    mq.addEventListener ? mq.addEventListener('change', onChange) : mq.addListener(onChange);
+    return () =>
+      mq.removeEventListener ? mq.removeEventListener('change', onChange) : mq.removeListener(onChange);
+  }, [bp]);
+  return mobile;
+}
+
+// Same breakpoint hook, reused for the extra column-hiding breakpoints (480 / 600)
+// that the original Trainees page relied on.
+function useViewportWidth() {
+  const [w, setW] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1280));
+  useEffect(() => {
+    const onResize = () => setW(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  return w;
+}
+
+export default function Trainees() {
   const dispatch = useAppDispatch();
-  const isMobile = window.innerWidth <= 768;
+  const isMobile = useIsMobile();
+  const vw = useViewportWidth();
+  const hideEmailCol = vw <= 480;
+  const hideBatchCol = vw <= 600;
 
   const trainees = useAppSelector(selectAllAdminTrainees) ?? [];
-  const batches  = useAppSelector(selectAllBatches) ?? [];
-  const status   = useAppSelector(selectAdminStatus);
-  const error    = useAppSelector(selectAdminError);
+  const batches = useAppSelector(selectAllBatches) ?? [];
+  const status = useAppSelector(selectAdminStatus);
+  const error = useAppSelector(selectAdminError);
 
   // Multi-trainee selection
   const [selectedTraineeIds, setSelectedTraineeIds] = useState([]);
@@ -480,51 +78,75 @@ const Trainees = () => {
   // Batch assignment modal
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [chosenBatchIds, setChosenBatchIds] = useState([]);
-  const [pickerOpen, setPickerOpen]         = useState(false);
-  const [assigning, setAssigning]           = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [assigning, setAssigning] = useState(false);
   const pickerRef = useRef(null);
 
-  // Toast
-  const [toast, setToast] = useState('');
+  // ── Built-in toast queue — identical pattern to Sessions/Users ──
+  const [toasts, setToasts] = useState([]);
+  const pushToast = (icon, title) => {
+    const id = Date.now() + Math.random();
+    setToasts((t) => [...t, { id, icon, title }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2600);
+  };
 
-  // Pagination
-  const [page, setPage]               = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  // ── Filters ──
+  const [q, setQ] = useState('');
+  const [fStatus, setFStatus] = useState('all');
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // HELPERS
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── Pagination ──
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
+  const loading = status === 'loading';
+
+  // ── Helpers ──
   const currentBatchIdSet = (trainee) => {
     const raw = trainee?.batchIds || [];
     return new Set(raw.map((b) => String(b?._id || b)));
   };
-
   const getTraineeBatches = (trainee) => {
     const set = currentBatchIdSet(trainee);
-    return batches
-      .filter((b) => set.has(String(b._id)))
-      .map((b) => ({ id: String(b._id), name: b.name }));
+    return batches.filter((b) => set.has(String(b._id))).map((b) => ({ id: String(b._id), name: b.name }));
   };
 
   const toggleTraineeSelect = (id) => {
     const key = String(id);
-    setSelectedTraineeIds((prev) =>
-      prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]
-    );
+    setSelectedTraineeIds((prev) => (prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]));
   };
 
-  const isAllSelected =
-    trainees.length > 0 && selectedTraineeIds.length === trainees.length;
+  // ── Filtering (search + status) — new, matches Sessions/Users filter bar ──
+  const filtered = useMemo(() => {
+    let list = trainees;
+    const needle = q.trim().toLowerCase();
+    if (needle) {
+      list = list.filter(
+        (t) => (t.name || '').toLowerCase().includes(needle) || (t.email || '').toLowerCase().includes(needle)
+      );
+    }
+    if (fStatus !== 'all') list = list.filter((t) => (fStatus === 'active' ? t.isActive : !t.isActive));
+    return list;
+  }, [trainees, q, fStatus]);
 
-  const isIndeterminate =
-    selectedTraineeIds.length > 0 && selectedTraineeIds.length < trainees.length;
+  const hasFilters = !!(q.trim() || fStatus !== 'all');
+  const clearFilters = () => {
+    setQ('');
+    setFStatus('all');
+  };
+
+  useEffect(() => {
+    setPage(1);
+  }, [q, fStatus]);
+
+  const isAllSelected = filtered.length > 0 && filtered.every((t) => selectedTraineeIds.includes(String(t._id)));
+  const isIndeterminate = filtered.some((t) => selectedTraineeIds.includes(String(t._id))) && !isAllSelected;
 
   const toggleSelectAll = () => {
+    const filteredIds = filtered.map((t) => String(t._id));
     if (isAllSelected) {
-      setSelectedTraineeIds([]);
+      setSelectedTraineeIds((prev) => prev.filter((id) => !filteredIds.includes(id)));
     } else {
-      setSelectedTraineeIds(trainees.map((t) => String(t._id)));
+      setSelectedTraineeIds((prev) => Array.from(new Set([...prev, ...filteredIds])));
     }
   };
 
@@ -533,45 +155,40 @@ const Trainees = () => {
     setPickerOpen(false);
     setShowBatchModal(true);
   };
-
   const closeBatchModal = () => {
     setShowBatchModal(false);
     setChosenBatchIds([]);
     setPickerOpen(false);
   };
-
   const toggleChosen = (id) => {
     const key = String(id);
-    setChosenBatchIds((prev) =>
-      prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]
-    );
+    setChosenBatchIds((prev) => (prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]));
   };
 
-  const showToast = (msg) => {
-    setToast(msg);
-    window.clearTimeout(showToast._t);
-    showToast._t = window.setTimeout(() => setToast(''), 3000);
-  };
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // HOOKS
-  // ─────────────────────────────────────────────────────────────────────────
-
+  // ── Hooks ──
   useEffect(() => {
     dispatch(fetchAdminTrainees());
     dispatch(fetchBatches());
   }, [dispatch]);
 
+  // ── Derived pagination (over FILTERED) ──
+  const total = filtered.length;
+  const allTotal = trainees.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   useEffect(() => {
-    setPage((p) => Math.min(p, Math.max(1, Math.ceil((trainees.length || 0) / rowsPerPage))));
-  }, [trainees.length, rowsPerPage]);
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+  const pageItems = useMemo(
+    () => filtered.slice((page - 1) * pageSize, page * pageSize),
+    [filtered, page, pageSize]
+  );
+  const startIdx = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const endIdx = Math.min(total, page * pageSize);
 
   useEffect(() => {
     if (!pickerOpen) return undefined;
     const onDocClick = (e) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target)) {
-        setPickerOpen(false);
-      }
+      if (pickerRef.current && !pickerRef.current.contains(e.target)) setPickerOpen(false);
     };
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
@@ -579,416 +196,420 @@ const Trainees = () => {
 
   const handleSaveBatches = async () => {
     if (selectedTraineeIds.length === 0 || chosenBatchIds.length === 0) return;
-
     setAssigning(true);
     try {
-      // For each chosen batch, assign ALL selected trainees at once
       await Promise.all(
         chosenBatchIds.map((batchId) =>
-          dispatch(
-            assignTraineesToBatch({ batchId, traineeIds: selectedTraineeIds })
-          ).unwrap()
+          dispatch(assignTraineesToBatch({ batchId, traineeIds: selectedTraineeIds })).unwrap()
         )
       );
-
       await dispatch(fetchAdminTrainees());
-
-      showToast(
+      pushToast(
+        'success',
         `${selectedTraineeIds.length} trainee${selectedTraineeIds.length > 1 ? 's' : ''} added to ${chosenBatchIds.length} batch${chosenBatchIds.length > 1 ? 'es' : ''}`
       );
       setSelectedTraineeIds([]);
       closeBatchModal();
     } catch (err) {
-      alert(err || 'Failed to assign batches');
+      pushToast('error', typeof err === 'string' ? err : 'Failed to assign batches');
     } finally {
       setAssigning(false);
     }
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // EARLY RETURNS
-  // ─────────────────────────────────────────────────────────────────────────
-
-  if (status === 'loading') {
+  // ── Pagination bar — identical structure to Sessions/Users Pager ──
+  const Pager = () => {
+    if (loading || total === 0) return null;
     return (
-      <div style={{ padding: isMobile ? '16px 20px' : '32px 36px', fontFamily: 'Inter, system-ui, sans-serif', background: '#F8FAFC', minHeight: '100vh' }}>
-        <div style={{ height: 28, width: 220, marginBottom: 8, background: 'linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%)', borderRadius: 8 }} />
-        <div style={{ height: 14, width: 300, marginBottom: 28, background: 'linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%)', borderRadius: 8 }} />
-        <div style={{ height: 400, background: 'linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%)', borderRadius: 16 }} />
-      </div>
-    );
-  }
-
-  if (status === 'failed') {
-    return (
-      <div style={{ padding: isMobile ? '16px 20px' : '32px 36px', fontFamily: 'Inter, system-ui, sans-serif', background: '#F8FAFC', minHeight: '100vh' }}>
-        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12, padding: 20 }}>
-          <p style={{ color: '#B91C1C', fontWeight: 600, margin: '0 0 4px' }}>Error loading trainees</p>
-          <p style={{ color: '#B91C1C', fontSize: 13, margin: 0 }}>{error}</p>
-        </div>
-      </div>
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // PAGINATION
-  // ─────────────────────────────────────────────────────────────────────────
-
-  const totalTrainees     = trainees.length;
-  const totalPages        = Math.max(1, Math.ceil(totalTrainees / rowsPerPage));
-  const safePage          = Math.min(page, totalPages);
-  const startIdx          = (safePage - 1) * rowsPerPage;
-  const paginatedTrainees = trainees.slice(startIdx, startIdx + rowsPerPage);
-
-  const thStyle = {
-    padding: isMobile ? '8px 12px' : '12px 16px',
-    textAlign: 'left',
-    fontSize: isMobile ? 10 : 11,
-    fontWeight: 700,
-    color: '#64748B',
-    letterSpacing: '0.7px',
-    textTransform: 'uppercase',
-    borderBottom: '1px solid #E2E8F0',
-  };
-
-  return (
-    <div style={{ padding: isMobile ? '16px 20px' : '32px 36px', fontFamily: 'Inter, system-ui, sans-serif', background: '#F8FAFC', minHeight: '100vh' }}>
-
-      {/* ── HEADER ── */}
-      <div style={{ marginBottom: isMobile ? 16 : 20, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12 }}>
-        <div>
-          <h1 style={{ fontSize: isMobile ? 22 : 28, fontWeight: 800, marginBottom: 6, color: '#0F172A', letterSpacing: '-0.5px' }}>
-            Trainees ({trainees.length})
-          </h1>
-          <p style={{ margin: 0, color: '#64748B', fontSize: isMobile ? 13 : 14, fontWeight: 500 }}>
-            Select trainees and assign them to one or more batches.
-          </p>
-        </div>
-
-        {/* Assign button — shown only when trainees are selected */}
-        {selectedTraineeIds.length > 0 && (
-          <button
-            onClick={openBatchModal}
-            style={{
-              padding: isMobile ? '8px 14px' : '10px 20px',
-              borderRadius: 10,
-              border: 'none',
-              background: '#3B82F6',
-              color: '#fff',
-              fontSize: isMobile ? 13 : 14,
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              boxShadow: '0 2px 8px rgba(59,130,246,0.35)',
-            }}
-          >
-            <span style={{ background: 'rgba(255,255,255,0.25)', borderRadius: 6, padding: '1px 7px', fontSize: 13, fontWeight: 800 }}>
-              {selectedTraineeIds.length}
-            </span>
-            Assign to Batch{selectedTraineeIds.length > 1 ? 'es' : ''}
+      <div style={pagerWrap}>
+        <span style={pagerInfo}>
+          Showing {startIdx}–{endIdx} of {total}
+        </span>
+        <div style={pagerBtns}>
+          <button style={pgBtn(page === 1)} disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+            ‹ Prev
           </button>
+          {pageList(page, totalPages).map((n, idx) =>
+            n === '…' ? (
+              <span key={`e${idx}`} style={pgEllipsis}>
+                …
+              </span>
+            ) : (
+              <button key={n} onClick={() => setPage(n)} style={pgNum(n === page)}>
+                {n}
+              </button>
+            )
+          )}
+          <button
+            style={pgBtn(page === totalPages)}
+            disabled={page === totalPages}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          >
+            Next ›
+          </button>
+        </div>
+        {!isMobile && (
+          <label style={pagerInfo}>
+            Per page{' '}
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(1);
+              }}
+              style={{ ...input, width: 'auto', display: 'inline-block', padding: '4px 8px' }}
+            >
+              {[10, 20, 40].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
         )}
       </div>
+    );
+  };
 
-      {/* ── SELECTION BAR ── */}
-      {selectedTraineeIds.length > 0 && (
-        <div style={{
-          marginBottom: 14,
-          padding: '10px 16px',
-          background: '#EFF6FF',
-          border: '1px solid #BFDBFE',
-          borderRadius: 10,
+  // ── Failed state ──
+  if (status === 'failed') {
+    return (
+      <div style={{ padding: isMobile ? 16 : 32, fontFamily: 'Public Sans, system-ui, sans-serif' }}>
+        <div style={banner('#fef2f2', '#fecaca', '#b91c1c')}>⚠️ {error || 'Error loading trainees'}</div>
+      </div>
+    );
+  }
+
+  const StatusBadge = ({ active }) => (
+    <span style={badge(active ? '#16a05f' : '#657691')}>{active ? 'active' : 'inactive'}</span>
+  );
+
+  // ── Render ──
+  return (
+    <div style={{ padding: isMobile ? 16 : 32, fontFamily: 'Public Sans, system-ui, sans-serif' }}>
+      {/* Header */}
+      <div
+        style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          marginBottom: 16,
+          gap: 12,
           flexWrap: 'wrap',
-          gap: 8,
-        }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#1D4ED8' }}>
+        }}
+      >
+        <div>
+          <h2 style={{ fontSize: isMobile ? 19 : 22, fontWeight: 800, margin: 0, color: '#172033' }}>
+            Trainees ({total}
+            {total !== allTotal ? ` of ${allTotal}` : ''})
+          </h2>
+          <p style={{ fontSize: 13, color: '#657691', margin: '4px 0 0' }}>
+            Select trainees and assign them to one or more batches.
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, width: isMobile ? '100%' : 'auto' }}>
+          <button
+            onClick={() => {
+              dispatch(fetchAdminTrainees());
+              dispatch(fetchBatches());
+            }}
+            style={btnGhost}
+          >
+            ↻ Refresh
+          </button>
+          {selectedTraineeIds.length > 0 && (
+            <button onClick={openBatchModal} style={btnSchedule(isMobile)}>
+              <span style={countPill}>{selectedTraineeIds.length}</span>
+              Assign to Batch{selectedTraineeIds.length > 1 ? 'es' : ''}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Filter bar */}
+      <div style={filterBar(isMobile)}>
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="🔎  Search by name or email…"
+          style={input}
+        />
+        <select value={fStatus} onChange={(e) => setFStatus(e.target.value)} style={input}>
+          <option value="all">All statuses</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+        <button onClick={clearFilters} disabled={!hasFilters} style={btnGhost}>
+          Clear
+        </button>
+      </div>
+
+      {/* Selection bar */}
+      {selectedTraineeIds.length > 0 && (
+        <div style={selectionBar}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#2f6f9b' }}>
             {selectedTraineeIds.length} trainee{selectedTraineeIds.length > 1 ? 's' : ''} selected
           </span>
-          <button
-            onClick={() => setSelectedTraineeIds([])}
-            style={{ background: 'none', border: 'none', color: '#3B82F6', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: 0 }}
-          >
+          <button onClick={() => setSelectedTraineeIds([])} style={linkBtn}>
             Clear selection
           </button>
         </div>
       )}
 
-      {/* ── EMPTY STATE ── */}
-      {trainees.length === 0 ? (
-        <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: 16, padding: isMobile ? 32 : 48, textAlign: 'center', boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 8px 24px rgba(30,58,95,0.08)' }}>
-          <p style={{ color: '#64748B', fontSize: isMobile ? 13 : 14, margin: 0 }}>No trainees found.</p>
-        </div>
-      ) : (
-        <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: 16, boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 8px 24px rgba(30,58,95,0.08)', overflow: 'hidden' }}>
-          <div style={{ overflowX: 'auto', maxHeight: isMobile ? '320px' : '460px', overflowY: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: isMobile ? '620px' : '760px' }}>
-              <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
-                <tr style={{ background: '#F8FAFC' }}>
-
-                  {/* Select-all checkbox */}
-                  <th style={{ ...thStyle, width: 44, paddingRight: 0 }}>
+      {/* DESKTOP: table */}
+      {!isMobile && (
+        <div
+          style={{
+            background: '#fff',
+            borderRadius: 10,
+            overflow: 'hidden',
+            boxShadow: '0 1px 2px rgba(23,32,51,.08), 0 12px 28px rgba(31,61,99,.05)',
+            border: '1px solid #dbe3ed',
+          }}
+        >
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
+              <thead>
+                <tr style={{ background: '#f8fafc', color: '#657691' }}>
+                  <th style={{ ...th, width: 44 }}>
                     <input
                       type="checkbox"
                       checked={isAllSelected}
-                      ref={(el) => { if (el) el.indeterminate = isIndeterminate; }}
+                      ref={(el) => {
+                        if (el) el.indeterminate = isIndeterminate;
+                      }}
                       onChange={toggleSelectAll}
-                      style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#3B82F6' }}
+                      style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#2f6f9b' }}
                     />
                   </th>
-
-                  <th style={thStyle}>#</th>
-                  <th style={thStyle}>Name</th>
-                  <th style={{ ...thStyle, display: window.innerWidth <= 480 ? 'none' : 'table-cell' }}>Email</th>
-                  <th style={{ ...thStyle, display: window.innerWidth <= 600 ? 'none' : 'table-cell' }}>Batches</th>
-                  <th style={thStyle}>Status</th>
+                  <th style={{ ...th, width: 52 }}>#</th>
+                  <th style={th}>Name</th>
+                  {!hideEmailCol && <th style={th}>Email</th>}
+                  {!hideBatchCol && <th style={th}>Batches</th>}
+                  <th style={th}>Status</th>
                 </tr>
               </thead>
-
               <tbody>
-                {paginatedTrainees.map((trainee, idx) => {
-                  const isChecked = selectedTraineeIds.includes(String(trainee._id));
-                  const traineeBatches = getTraineeBatches(trainee);
-                  return (
-                    <tr
-                      key={trainee._id || idx}
-                      onClick={() => toggleTraineeSelect(String(trainee._id))}
-                      style={{
-                        borderBottom: '1px solid #E2E8F0',
-                        background: isChecked ? '#F0F7FF' : 'transparent',
-                        cursor: 'pointer',
-                        transition: 'background 0.15s',
-                      }}
-                    >
-                      {/* Row checkbox */}
-                      <td style={{ padding: isMobile ? '8px 12px' : '12px 16px', paddingRight: 0 }}
-                          onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => toggleTraineeSelect(String(trainee._id))}
-                          style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#3B82F6' }}
-                        />
-                      </td>
-
-                      {/* # */}
-                      <td style={{ padding: isMobile ? '8px 12px' : '12px 16px', fontSize: isMobile ? 12 : 13, color: '#64748B' }}>
-                        {startIdx + idx + 1}
-                      </td>
-
-                      {/* Name */}
-                      <td style={{ padding: isMobile ? '8px 12px' : '12px 16px', fontSize: isMobile ? 12 : 13, color: '#0F172A', fontWeight: 600 }}>
-                        <div style={{ maxWidth: isMobile ? '120px' : 'none', overflow: isMobile ? 'hidden' : 'visible', textOverflow: isMobile ? 'ellipsis' : 'clip', whiteSpace: isMobile ? 'nowrap' : 'normal' }}>
-                          {trainee.name || '—'}
-                        </div>
-                      </td>
-
-                      {/* Email */}
-                      <td style={{ padding: isMobile ? '8px 12px' : '12px 16px', fontSize: isMobile ? 12 : 13, color: '#64748B', display: window.innerWidth <= 480 ? 'none' : 'table-cell' }}>
-                        <div style={{ maxWidth: isMobile ? '150px' : 'none', overflow: isMobile ? 'hidden' : 'visible', textOverflow: isMobile ? 'ellipsis' : 'clip', whiteSpace: isMobile ? 'nowrap' : 'normal' }}>
-                          {trainee.email || '—'}
-                        </div>
-                      </td>
-
-                      {/* Batches */}
-                      <td style={{ padding: isMobile ? '8px 12px' : '12px 16px', fontSize: isMobile ? 12 : 13, display: window.innerWidth <= 600 ? 'none' : 'table-cell' }}>
-                        {traineeBatches.length > 0 ? (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxWidth: 260 }}>
-                            {traineeBatches.map((b) => (
-                              <span key={b.id} style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, background: '#DBEAFE', color: '#1E40AF', whiteSpace: 'nowrap' }}>
-                                {b.name}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span style={{ color: '#94A3B8', fontSize: '12px' }}>Not Assigned</span>
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} style={emptyCell}>
+                      Loading trainees…
+                    </td>
+                  </tr>
+                ) : total === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={emptyCell}>
+                      {hasFilters ? 'No trainees match your filters.' : 'No trainees found.'}
+                    </td>
+                  </tr>
+                ) : (
+                  pageItems.map((t, i) => {
+                    const isChecked = selectedTraineeIds.includes(String(t._id));
+                    const tBatches = getTraineeBatches(t);
+                    return (
+                      <tr
+                        key={t._id || i}
+                        onClick={() => toggleTraineeSelect(String(t._id))}
+                        style={{
+                          background: isChecked ? '#eaf3fb' : i % 2 ? '#f8fafc' : '#fff',
+                          borderBottom: '1px solid #dbe3ed',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <td style={td} onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => toggleTraineeSelect(String(t._id))}
+                            style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#2f6f9b' }}
+                          />
+                        </td>
+                        <td style={{ ...td, color: '#64748B', fontWeight: 700 }}>{startIdx + i}</td>
+                        <td style={td}>
+                          <span style={{ fontWeight: 600, color: '#172033' }}>{t.name || '—'}</span>
+                        </td>
+                        {!hideEmailCol && <td style={td}>{t.email || '—'}</td>}
+                        {!hideBatchCol && (
+                          <td style={td}>
+                            {tBatches.length > 0 ? (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxWidth: 260 }}>
+                                {tBatches.map((b) => (
+                                  <span key={b.id} style={batchPill}>
+                                    {b.name}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>Not assigned</span>
+                            )}
+                          </td>
                         )}
-                      </td>
-
-                      {/* Status */}
-                      <td style={{ padding: isMobile ? '8px 12px' : '12px 16px' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', padding: isMobile ? '2px 8px' : '3px 10px', borderRadius: 999, fontSize: isMobile ? 10 : 11, fontWeight: 700, background: trainee.isActive ? '#DCFCE7' : '#F1F5F9', color: trainee.isActive ? '#15803D' : '#475569' }}>
-                          {trainee.isActive ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        <td style={{ padding: '11px 16px' }}>
+                          <StatusBadge active={t.isActive} />
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
-          </div>
-
-          {/* ── PAGINATOR ── */}
-          <div style={{ padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, borderTop: '1px solid #E2E8F0', background: '#fff', flexWrap: 'wrap' }}>
-            <div style={{ color: '#64748B', fontSize: 13, fontWeight: 600 }}>
-              Page <span style={{ color: '#0F172A' }}>{safePage}</span> of <span style={{ color: '#0F172A' }}>{totalPages}</span>
-              <span style={{ fontWeight: 500 }}> · {totalTrainees} total</span>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ color: '#64748B', fontSize: 13, fontWeight: 600 }}>Rows:</span>
-                <select
-                  value={rowsPerPage}
-                  onChange={(e) => { setRowsPerPage(Number(e.target.value)); setPage(1); }}
-                  style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #D1D5DB', background: 'white', fontWeight: 700, color: '#0F172A' }}
-                >
-                  {[5, 10, 15, 20].map((n) => (<option key={n} value={n}>{n}</option>))}
-                </select>
-              </div>
-
-              <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}
-                style={{ padding: '8px 12px', background: safePage <= 1 ? '#F8FAFC' : '#fff', color: safePage <= 1 ? '#94A3B8' : '#475569', border: '1px solid #E2E8F0', borderRadius: '6px', fontSize: '14px', cursor: safePage <= 1 ? 'not-allowed' : 'pointer', transition: 'all 0.2s' }}>
-                ← Previous
-              </button>
-
-              {Array.from({ length: totalPages }, (_, i) => i + 1)
-                .filter((p) => { const distance = Math.abs(p - safePage); return distance <= 2 || p === 1 || p === totalPages; })
-                .map((p, i, arr) => {
-                  const prevPage = arr[i - 1];
-                  const showEllipsis = prevPage && p - prevPage > 1;
-                  return (
-                    <React.Fragment key={p}>
-                      {showEllipsis && <span style={{ padding: '8px 4px', color: '#94A3B8' }}>...</span>}
-                      <button onClick={() => setPage(p)}
-                        style={{ padding: '8px 12px', background: safePage === p ? '#3B82F6' : '#fff', color: safePage === p ? '#fff' : '#475569', border: `1px solid ${safePage === p ? '#3B82F6' : '#E2E8F0'}`, borderRadius: '6px', fontSize: '14px', fontWeight: safePage === p ? '600' : '400', cursor: 'pointer', minWidth: '40px', transition: 'all 0.2s' }}>
-                        {p}
-                      </button>
-                    </React.Fragment>
-                  );
-                })}
-
-              <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}
-                style={{ padding: '8px 12px', background: safePage >= totalPages ? '#F8FAFC' : '#fff', color: safePage >= totalPages ? '#94A3B8' : '#475569', border: '1px solid #E2E8F0', borderRadius: '6px', fontSize: '14px', cursor: safePage >= totalPages ? 'not-allowed' : 'pointer', transition: 'all 0.2s' }}>
-                Next →
-              </button>
-            </div>
           </div>
         </div>
       )}
 
+      {/* MOBILE: cards */}
+      {isMobile && (
+        <div style={{ display: 'grid', gap: 12 }}>
+          {loading ? (
+            <div style={cardEmpty}>Loading trainees…</div>
+          ) : total === 0 ? (
+            <div style={cardEmpty}>{hasFilters ? 'No trainees match your filters.' : 'No trainees found.'}</div>
+          ) : (
+            pageItems.map((t, i) => {
+              const isChecked = selectedTraineeIds.includes(String(t._id));
+              const tBatches = getTraineeBatches(t);
+              return (
+                <div
+                  key={t._id || i}
+                  onClick={() => toggleTraineeSelect(String(t._id))}
+                  style={{ ...card, background: isChecked ? '#eaf3fb' : '#fff', cursor: 'pointer' }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={() => toggleTraineeSelect(String(t._id))}
+                        style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#2f6f9b' }}
+                      />
+                      <span style={{ fontWeight: 700, color: '#172033', fontSize: 15 }}>{t.name || '—'}</span>
+                    </div>
+                    <StatusBadge active={t.isActive} />
+                  </div>
+                  <div style={cardMeta}>
+                    <b>Email:</b> {t.email || '—'}
+                  </div>
+                  <div style={cardMeta}>
+                    <b>Batches:</b>{' '}
+                    {tBatches.length > 0 ? (
+                      <span>{tBatches.map((b) => b.name).join(', ')}</span>
+                    ) : (
+                      <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>Not assigned</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      <Pager />
+
       {/* ── BATCH ASSIGNMENT MODAL ── */}
       {showBatchModal && (
-        <div
-          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}
-          onClick={closeBatchModal}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{ backgroundColor: 'white', borderRadius: 16, padding: isMobile ? '20px 18px' : 24, width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)' }}
-          >
-            {/* Modal header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-              <h2 style={{ fontSize: isMobile ? 18 : 20, fontWeight: 700, color: '#0F172A', margin: 0 }}>
-                Assign to Batches
-              </h2>
-              <button onClick={closeBatchModal} style={{ background: 'none', border: 'none', fontSize: 20, lineHeight: 1, cursor: 'pointer', color: '#9CA3AF', padding: 4 }}>✕</button>
-            </div>
-            <p style={{ color: '#64748B', fontSize: 14, marginBottom: 18 }}>
-              Assigning <span style={{ fontWeight: 700, color: '#0F172A' }}>{selectedTraineeIds.length}</span> trainee{selectedTraineeIds.length > 1 ? 's' : ''} to the selected batches.
-            </p>
-
-            {/* Selected trainees preview */}
-            <div style={{ marginBottom: 18 }}>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 8 }}>
-                Selected Trainees
-              </label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 90, overflowY: 'auto', padding: '2px 0' }}>
-                {selectedTraineeIds.map((id) => {
-                  const t = trainees.find((x) => String(x._id) === id);
-                  return (
-                    <span key={id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600, background: '#EFF6FF', color: '#1D4ED8' }}>
-                      {t ? t.name : id}
-                      <button
-                        onClick={() => setSelectedTraineeIds((prev) => prev.filter((x) => x !== id))}
-                        style={{ background: 'none', border: 'none', color: '#3B82F6', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: 0 }}
-                      >✕</button>
-                    </span>
-                  );
-                })}
-              </div>
+        <div style={overlay} onMouseDown={() => !assigning && closeBatchModal()}>
+          <div style={{ ...dialog, maxWidth: isMobile ? '100%' : 560 }} onMouseDown={(e) => e.stopPropagation()}>
+            <div style={dialogHead}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#172033' }}>Assign to batches</h3>
+              <button onClick={closeBatchModal} style={bannerClose}>
+                ×
+              </button>
             </div>
 
-            {/* Multi-select batch dropdown */}
-            <div style={{ marginBottom: 22 }}>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 8 }}>
-                Select Batches
-              </label>
+            <div style={{ padding: 20, display: 'grid', gap: 14 }}>
+              <p style={{ margin: 0, fontSize: 13.5, color: '#41506a' }}>
+                Assigning <b style={{ color: '#172033' }}>{selectedTraineeIds.length}</b> trainee
+                {selectedTraineeIds.length > 1 ? 's' : ''} to the selected batches.
+              </p>
 
-              {batches.length === 0 ? (
-                <p style={{ fontSize: 13, color: '#94A3B8', margin: 0 }}>No batches available.</p>
-              ) : (
-                <div ref={pickerRef} style={{ position: 'relative' }}>
-                  <button
-                    type="button"
-                    onClick={() => setPickerOpen((o) => !o)}
-                    style={{ width: '100%', padding: '11px 14px', borderRadius: 8, border: '1px solid #D1D5DB', background: 'white', fontSize: 14, color: chosenBatchIds.length ? '#0F172A' : '#9CA3AF', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'left' }}
-                  >
-                    <span>
-                      {chosenBatchIds.length === 0
-                        ? 'Select batches…'
-                        : `${chosenBatchIds.length} batch${chosenBatchIds.length > 1 ? 'es' : ''} selected`}
-                    </span>
-                    <span style={{ color: '#9CA3AF', transform: pickerOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}>▾</span>
-                  </button>
-
-                  {pickerOpen && (
-                    <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, boxShadow: '0 12px 28px rgba(15,23,42,0.12)', maxHeight: 240, overflowY: 'auto', zIndex: 20, padding: 6 }}>
-                      {batches.map((batch) => {
-                        const checked = chosenBatchIds.includes(String(batch._id));
-                        return (
-                          <label
-                            key={batch._id}
-                            style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 8, cursor: 'pointer', background: checked ? '#EFF6FF' : 'transparent', fontSize: 14, color: '#0F172A' }}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => toggleChosen(String(batch._id))}
-                              style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#3B82F6' }}
-                            />
-                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{batch.name}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Chosen batch preview pills */}
-              {chosenBatchIds.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
-                  {chosenBatchIds.map((id) => {
-                    const b = batches.find((x) => String(x._id) === id);
+              <Field label="Selected trainees">
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 90, overflowY: 'auto' }}>
+                  {selectedTraineeIds.map((id) => {
+                    const t = trainees.find((x) => String(x._id) === id);
                     return (
-                      <span key={id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 8px 3px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600, background: '#DCFCE7', color: '#15803D' }}>
-                        {b ? b.name : id}
-                        <button onClick={() => toggleChosen(id)} style={{ background: 'none', border: 'none', color: '#15803D', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: 0 }}>✕</button>
+                      <span key={id} style={tagPillBlue}>
+                        {t ? t.name : id}
+                        <span
+                          onClick={() => setSelectedTraineeIds((prev) => prev.filter((x) => x !== id))}
+                          style={tagPillCloseBlue}
+                        >
+                          ×
+                        </span>
                       </span>
                     );
                   })}
                 </div>
-              )}
+              </Field>
+
+              <Field label="Select batches">
+                {batches.length === 0 ? (
+                  <p style={{ fontSize: 13, color: '#94A3B8', margin: 0 }}>No batches available.</p>
+                ) : (
+                  <div ref={pickerRef} style={{ position: 'relative' }}>
+                    <div
+                      onClick={() => setPickerOpen((o) => !o)}
+                      style={{
+                        ...input,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                        color: chosenBatchIds.length ? '#172033' : '#94A3B8',
+                      }}
+                    >
+                      <span>
+                        {chosenBatchIds.length === 0
+                          ? 'Select batches…'
+                          : `${chosenBatchIds.length} batch${chosenBatchIds.length > 1 ? 'es' : ''} selected`}
+                      </span>
+                      <span style={{ fontSize: 10, color: '#657691' }}>{pickerOpen ? '▲' : '▼'}</span>
+                    </div>
+
+                    {pickerOpen && (
+                      <div style={batchDropdown}>
+                        {batches.map((b) => {
+                          const checked = chosenBatchIds.includes(String(b._id));
+                          return (
+                            <div key={b._id} onClick={() => toggleChosen(String(b._id))} style={batchOption(checked)}>
+                              <span style={checkbox(checked)}>{checked && '✓'}</span>
+                              {b.name}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {chosenBatchIds.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
+                    {chosenBatchIds.map((id) => {
+                      const b = batches.find((x) => String(x._id) === id);
+                      return (
+                        <span key={id} style={tagPillGreen}>
+                          {b ? b.name : id}
+                          <span onClick={() => toggleChosen(id)} style={tagPillCloseGreen}>
+                            ×
+                          </span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+              </Field>
             </div>
 
-            {/* Modal actions */}
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-              <button
-                onClick={closeBatchModal}
-                disabled={assigning}
-                style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid #D1D5DB', backgroundColor: 'white', color: '#374151', fontSize: 14, fontWeight: 600, cursor: assigning ? 'not-allowed' : 'pointer', opacity: assigning ? 0.5 : 1 }}
-              >
+            <div style={dialogFoot}>
+              <button onClick={closeBatchModal} disabled={assigning} style={btnGhost}>
                 Cancel
               </button>
               <button
                 onClick={handleSaveBatches}
                 disabled={assigning || chosenBatchIds.length === 0 || selectedTraineeIds.length === 0}
-                style={{ padding: '10px 20px', borderRadius: 8, border: 'none', backgroundColor: '#3B82F6', color: 'white', fontSize: 14, fontWeight: 600, cursor: (assigning || chosenBatchIds.length === 0) ? 'not-allowed' : 'pointer', opacity: (assigning || chosenBatchIds.length === 0) ? 0.5 : 1 }}
+                style={btnPrimary}
               >
                 {assigning
                   ? 'Saving…'
@@ -999,14 +620,119 @@ const Trainees = () => {
         </div>
       )}
 
-      {/* ── TOAST ── */}
-      {toast && (
-        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: '#0F172A', color: '#fff', padding: '12px 18px', borderRadius: 10, fontSize: 14, fontWeight: 600, boxShadow: '0 10px 30px rgba(15,23,42,0.25)', zIndex: 2000 }}>
-          {toast}
+      {/* Toasts (built-in, stacked queue) */}
+      {toasts.length > 0 && (
+        <div style={toastWrap}>
+          {toasts.map((t) => {
+            const cfg = TOAST[t.icon] || TOAST.info;
+            return (
+              <div key={t.id} style={toastItem(cfg.border)}>
+                <span style={{ color: cfg.color, fontWeight: 800, fontSize: 15 }}>{cfg.glyph}</span>
+                <span>{t.title}</span>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
   );
+}
+
+// ── Small presentational bits ──────────────────────────────────────────────────
+function Field({ label, children }) {
+  return (
+    <label style={{ display: 'block' }}>
+      <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#657691', marginBottom: 6 }}>
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+// ── Styles (tokens lifted directly from AdminSessions.jsx / UserManagement.jsx) ─
+const th = { padding: '12px 16px', textAlign: 'left', fontSize: 12, letterSpacing: '.7px', textTransform: 'uppercase', whiteSpace: 'nowrap' };
+const td = { padding: '11px 16px', fontSize: 13, color: '#2b3648' };
+const emptyCell = { padding: 32, textAlign: 'center', color: '#657691' };
+
+const card = { background: '#fff', border: '1px solid #dbe3ed', borderRadius: 12, padding: 14, boxShadow: '0 1px 2px rgba(23,32,51,.06)' };
+const cardEmpty = { background: '#fff', border: '1px solid #dbe3ed', borderRadius: 12, padding: 28, textAlign: 'center', color: '#657691' };
+const cardMeta = { fontSize: 13, color: '#41506a', marginTop: 6 };
+
+const badge = (bg) => ({ background: bg, color: '#fff', padding: '3px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' });
+const batchPill = { display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600, background: '#DBEAFE', color: '#1E40AF', whiteSpace: 'nowrap' };
+
+const btnPrimary = { background: '#2f6f9b', color: '#fff', border: 'none', padding: '9px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' };
+const btnGhost = { background: '#fff', color: '#41506a', border: '1px solid #dbe3ed', padding: '9px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' };
+const linkBtn = { background: 'none', border: 'none', color: '#2f6f9b', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: 0 };
+
+const btnSchedule = (mobile) => ({
+  background: 'linear-gradient(180deg,#3a86c0,#2f6f9b)',
+  color: '#fff',
+  border: 'none',
+  padding: '11px 18px',
+  borderRadius: 10,
+  fontSize: 14,
+  fontWeight: 800,
+  letterSpacing: '.2px',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  boxShadow: '0 6px 16px rgba(47,111,155,.32)',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  whiteSpace: 'nowrap',
+  flex: mobile ? 1 : '0 0 auto',
+  justifyContent: 'center',
+});
+const countPill = { background: 'rgba(255,255,255,0.25)', borderRadius: 6, padding: '1px 7px', fontSize: 13, fontWeight: 800 };
+
+const input = { width: '100%', boxSizing: 'border-box', padding: '9px 11px', borderRadius: 8, border: '1px solid #dbe3ed', fontSize: 13, fontFamily: 'inherit', color: '#172033', background: '#fff' };
+
+const filterBar = (mobile) => ({
+  display: 'grid',
+  gridTemplateColumns: mobile ? '1fr' : 'minmax(220px,1.6fr) 1fr auto',
+  gap: 10,
+  marginBottom: 16,
+  alignItems: 'center',
+});
+
+const selectionBar = {
+  marginBottom: 14,
+  padding: '10px 16px',
+  background: '#eaf3fb',
+  border: '1px solid #bcd6ea',
+  borderRadius: 10,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  flexWrap: 'wrap',
+  gap: 8,
 };
 
-export default Trainees;
+const tagPillBlue = { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600, background: '#eaf3fb', color: '#2f6f9b' };
+const tagPillCloseBlue = { cursor: 'pointer', color: '#2f6f9b', fontSize: 13, lineHeight: 1, fontWeight: 700 };
+const tagPillGreen = { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 8px 3px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600, background: '#e3f7ec', color: '#16a05f' };
+const tagPillCloseGreen = { cursor: 'pointer', color: '#16a05f', fontSize: 13, lineHeight: 1, fontWeight: 700 };
+
+const batchDropdown = { position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, background: '#fff', border: '1px solid #dbe3ed', borderRadius: 10, boxShadow: '0 12px 28px rgba(15,23,42,.12)', maxHeight: 240, overflowY: 'auto', zIndex: 20, padding: 6 };
+const batchOption = (selected) => ({ padding: '9px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, background: selected ? '#eaf3fb' : 'transparent', borderRadius: 8, fontSize: 14, color: selected ? '#2f6f9b' : '#172033' });
+const checkbox = (selected) => ({ width: 16, height: 16, borderRadius: 4, flexShrink: 0, border: `2px solid ${selected ? '#2f6f9b' : '#CBD5E1'}`, background: selected ? '#2f6f9b' : '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 10, fontWeight: 700 });
+
+const overlay = { position: 'fixed', inset: 0, background: 'rgba(15,23,42,.45)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', zIndex: 1000 };
+const dialog = { background: '#fff', borderRadius: 14, width: '100%', boxShadow: '0 20px 60px rgba(15,23,42,.3)', marginTop: 24 };
+const dialogHead = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px', borderBottom: '1px solid #eef2f7' };
+const dialogFoot = { display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '16px 20px', borderTop: '1px solid #eef2f7' };
+
+const banner = (bg, border, color) => ({ background: bg, border: `1px solid ${border}`, color, padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' });
+const bannerClose = { background: 'transparent', border: 'none', fontSize: 20, lineHeight: 1, cursor: 'pointer', color: 'inherit' };
+
+const pagerWrap = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginTop: 16 };
+const pagerInfo = { fontSize: 12.5, color: '#657691' };
+const pagerBtns = { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' };
+const pgBtn = (disabled) => ({ background: '#fff', color: disabled ? '#b6c0cf' : '#41506a', border: '1px solid #dbe3ed', padding: '6px 10px', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: 'inherit' });
+const pgNum = (active) => ({ background: active ? '#2f6f9b' : '#fff', color: active ? '#fff' : '#41506a', border: `1px solid ${active ? '#2f6f9b' : '#dbe3ed'}`, padding: '6px 11px', borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: 'pointer', minWidth: 36, fontFamily: 'inherit' });
+const pgEllipsis = { color: '#9aa6b6', padding: '0 2px' };
+
+const toastWrap = { position: 'fixed', top: 16, right: 16, display: 'grid', gap: 8, zIndex: 2000 };
+const toastItem = (border) => ({ display: 'flex', alignItems: 'center', gap: 10, minWidth: 220, maxWidth: 360, padding: '11px 14px', borderRadius: 10, background: '#fff', boxShadow: '0 10px 30px rgba(15,23,42,.18)', border: `1px solid ${border}`, fontSize: 13.5, color: '#172033' });
